@@ -11,16 +11,13 @@ import datetime
 import pickle
 import os
 import random
-from copy import deepcopy
 import yaml
-import json
 
-# from .grid import Grid
 from ev2gym_driveway.models.replay import EvCityReplay
 from ev2gym_driveway.visuals.plots import ev_city_plot, visualize_step
-from ev2gym_driveway.utilities.utils import EV_spawner_for_driveways, get_statistics, print_statistics, calculate_charge_power_potential, spawn_single_EV
-from ev2gym_driveway.utilities.loaders import load_ev_spawn_scenarios, load_power_setpoints, load_transformers, load_ev_charger_profiles, load_ev_profiles, load_electricity_prices, load_weekly_EV_profiles
-from ev2gym_driveway.visuals.render import Renderer
+from ev2gym_driveway.utilities.utils import EV_spawner_for_driveways, calculate_charge_power_potential
+from ev2gym_driveway.utilities.statistics import get_statistics
+from ev2gym_driveway.utilities.loaders import load_ev_spawn_scenarios, load_power_setpoints, load_transformers, load_ev_charger_profiles, load_electricity_prices, load_weekly_EV_profiles
 from ev2gym_driveway.models.Household import Household
 from ev2gym_driveway.models.ev_charger import EV_Charger
 from ev2gym_driveway.models.ev import EV
