@@ -11,11 +11,11 @@ import pkg_resources
 import json
 from typing import List, Tuple
 
-from ev2gym.models.ev_charger import EV_Charger
-from ev2gym.models.ev import EV
-from ev2gym.models.transformer import Transformer
+from ev2gym_driveway.models.ev_charger import EV_Charger
+from ev2gym_driveway.models.ev import EV
+from ev2gym_driveway.models.transformer import Transformer
 
-from ev2gym.utilities.utils import EV_spawner, generate_power_setpoints, EV_spawner_GF
+from ev2gym_driveway.utilities.utils import EV_spawner, generate_power_setpoints, EV_spawner_GF
 
 
 def load_ev_spawn_scenarios(env) -> None:
@@ -28,7 +28,7 @@ def load_ev_spawn_scenarios(env) -> None:
             ev_specs_file = env.config['ev_specs_file']
         else:            
             ev_specs_file = pkg_resources.resource_filename(
-                'ev2gym', 'data/ev_specs.json')
+                'ev2gym_driveway', 'data/ev_specs.json')
         
         file = resolve_path(env.config['ev_specs_file'])
         with open(file) as f:
@@ -41,32 +41,22 @@ def load_ev_spawn_scenarios(env) -> None:
 
         env.normalized_ev_registrations = registrations/registrations.sum()
 
-    if env.scenario == 'GF':
-        env.df_arrival = np.load('./GF_data/time_of_arrival.npy')  # weekdays
-        env.time_of_connection_vs_hour_weekday = np.load(
-            './GF_data/weekday_time_of_stay.npy')
-        env.time_of_connection_vs_hour_weekend = np.load(
-            './GF_data/weekend_time_of_stay.npy')
-        env.df_req_energy_weekday = np.load('./GF_data/weekday_volumeKWh.npy')
-        env.df_req_energy_weekend = np.load('./GF_data/weekend_volumeKWh.npy')
-
-        return
 
     df_arrival_week_file = pkg_resources.resource_filename(
-        'ev2gym', 'data/distribution-of-arrival.csv')
+        'ev2gym_driveway', 'data/distribution-of-arrival.csv')
     df_arrival_weekend_file = pkg_resources.resource_filename(
-        'ev2gym', 'data/distribution-of-arrival-weekend.csv')
+        'ev2gym_driveway', 'data/distribution-of-arrival-weekend.csv')
     df_connection_time_file = pkg_resources.resource_filename(
-        'ev2gym', 'data/distribution-of-connection-time.csv')
+        'ev2gym_driveway', 'data/distribution-of-connection-time.csv')
     df_energy_demand_file = pkg_resources.resource_filename(
-        'ev2gym', 'data/distribution-of-energy-demand.csv')
+        'ev2gym_driveway', 'data/distribution-of-energy-demand.csv')
     time_of_connection_vs_hour_file = pkg_resources.resource_filename(
-        'ev2gym', 'data/time_of_connection_vs_hour.npy')
+        'ev2gym_driveway', 'data/time_of_connection_vs_hour.npy')
 
     df_req_energy_file = pkg_resources.resource_filename(
-        'ev2gym', 'data/mean-demand-per-arrival.csv')
+        'ev2gym_driveway', 'data/mean-demand-per-arrival.csv')
     df_time_of_stay_vs_arrival_file = pkg_resources.resource_filename(
-        'ev2gym', 'data/mean-session-length-per.csv')
+        'ev2gym_driveway', 'data/mean-session-length-per.csv')
 
     env.df_arrival_week = pd.read_csv(df_arrival_week_file)  # weekdays
     env.df_arrival_weekend = pd.read_csv(df_arrival_weekend_file)  # weekends
@@ -109,7 +99,7 @@ def generate_residential_inflexible_loads(env) -> np.ndarray:
 
     # Load the data
     data_path = pkg_resources.resource_filename(
-        'ev2gym', 'data/residential_loads.csv')
+        'ev2gym_driveway', 'data/residential_loads.csv')
     data = pd.read_csv(data_path, header=None)
 
     desired_timescale = env.timescale
@@ -166,7 +156,7 @@ def generate_pv_generation(env) -> np.ndarray:
 
     # Load the data
     data_path = pkg_resources.resource_filename(
-        'ev2gym', 'data/pv_netherlands.csv')
+        'ev2gym_driveway', 'data/pv_netherlands.csv')
     data = pd.read_csv(data_path, sep=',', header=0)
     data.drop(['time', 'local_time'], inplace=True, axis=1)
 
@@ -230,19 +220,10 @@ def load_transformers(env) -> List[Transformer]:
         - transformers: a list of transformer objects
     '''
 
-    if env.load_from_replay_path is not None:
-        return env.replay.transformers
-
     transformers = []
 
     if env.config['inflexible_loads']['include']:
-
-        if env.scenario == 'private':
-            inflexible_loads = generate_residential_inflexible_loads(env)
-
-        # TODO add inflexible loads for public and workplace scenarios
-        else:
-            inflexible_loads = generate_residential_inflexible_loads(env)
+        inflexible_loads = generate_residential_inflexible_loads(env)
 
     else:
         inflexible_loads = np.zeros((env.number_of_transformers,
@@ -254,43 +235,24 @@ def load_transformers(env) -> List[Transformer]:
         solar_power = np.zeros((env.number_of_transformers,
                                 env.simulation_length))
 
-    if env.charging_network_topology:
-        # parse the topology file and create the transformers
-        cs_counter = 0
-        for i, tr in enumerate(env.charging_network_topology):
-            cs_ids = []
-            for cs in env.charging_network_topology[tr]['charging_stations']:
-                cs_ids.append(cs_counter)
-                cs_counter += 1
-            transformer = Transformer(id=i,
-                                      env=env,
-                                      cs_ids=cs_ids,
-                                      max_power=env.charging_network_topology[tr]['max_power'],
-                                      inflexible_load=inflexible_loads[i, :],
-                                      solar_power=solar_power[i, :],
-                                      simulation_length=env.simulation_length
-                                      )
 
-            transformers.append(transformer)
+    if env.number_of_transformers > env.cs:
+        raise ValueError(
+            'The number of transformers cannot be greater than the number of charging stations')
+    for i in range(env.number_of_transformers):
+        # get indexes where the transformer is connected
+        transformer = Transformer(id=i,
+                                    env=env,
+                                    cs_ids=np.where(
+                                        np.array(env.cs_transformers) == i)[0],
+                                    max_power=env.config['transformer']['max_power'],
+                                    inflexible_load=inflexible_loads[i, :],
+                                    solar_power=solar_power[i, :],
+                                    simulation_length=env.simulation_length
+                                    )
 
-    else:
-        if env.number_of_transformers > env.cs:
-            raise ValueError(
-                'The number of transformers cannot be greater than the number of charging stations')
-        for i in range(env.number_of_transformers):
-            # get indexes where the transformer is connected
-            transformer = Transformer(id=i,
-                                      env=env,
-                                      cs_ids=np.where(
-                                          np.array(env.cs_transformers) == i)[0],
-                                      max_power=env.config['transformer']['max_power'],
-                                      inflexible_load=inflexible_loads[i, :],
-                                      solar_power=solar_power[i, :],
-                                      simulation_length=env.simulation_length
-                                      )
-
-            transformers.append(transformer)
-    env.n_transformers = len(transformers)
+        transformers.append(transformer)
+    
     return transformers
 
 
@@ -302,65 +264,32 @@ def load_ev_charger_profiles(env) -> List[EV_Charger]:
         - ev_charger_profiles: a list of ev_charger_profile objects'''
 
     charging_stations = []
-    if env.load_from_replay_path is not None:
-        return env.replay.charging_stations
 
     v2g_enabled = env.config['v2g_enabled']
 
-    if env.charging_network_topology:
-        # parse the topology file and create the charging stations
-        cs_counter = 0
-        for i, tr in enumerate(env.charging_network_topology):
-            for cs in env.charging_network_topology[tr]['charging_stations']:
-                ev_charger = EV_Charger(id=cs_counter,
-                                        connected_bus=0,
-                                        connected_transformer=i,
-                                        min_charge_current=env.charging_network_topology[tr][
-                                            'charging_stations'][cs]['min_charge_current'],
-                                        max_charge_current=env.charging_network_topology[tr][
-                                            'charging_stations'][cs]['max_charge_current'],
-                                        min_discharge_current=env.charging_network_topology[tr][
-                                            'charging_stations'][cs]['min_discharge_current'],
-                                        max_discharge_current=env.charging_network_topology[tr][
-                                            'charging_stations'][cs]['max_discharge_current'],
-                                        voltage=env.charging_network_topology[tr][
-                                            'charging_stations'][cs]['voltage'],
-                                        n_ports=env.charging_network_topology[tr][
-                                            'charging_stations'][cs]['n_ports'],
-                                        charger_type=env.charging_network_topology[tr][
-                                            'charging_stations'][cs]['charger_type'],
-                                        phases=env.charging_network_topology[tr]['charging_stations'][cs]['phases'],
-                                        timescale=env.timescale,
-                                        verbose=env.verbose,)
-                cs_counter += 1
-                charging_stations.append(ev_charger)
-        env.cs = len(charging_stations)
-        return charging_stations
-
+    if v2g_enabled:
+        max_discharge_current = env.config['charging_station']['max_discharge_current']
+        min_discharge_current = env.config['charging_station']['min_discharge_current']
     else:
-        if v2g_enabled:
-            max_discharge_current = env.config['charging_station']['max_discharge_current']
-            min_discharge_current = env.config['charging_station']['min_discharge_current']
-        else:
-            max_discharge_current = 0
-            min_discharge_current = 0
+        max_discharge_current = 0
+        min_discharge_current = 0
 
-        for i in range(env.cs):
-            ev_charger = EV_Charger(id=i,
-                                    connected_bus=0,  # env.cs_buses[i],
-                                    connected_transformer=env.cs_transformers[i],
-                                    n_ports=env.number_of_ports_per_cs,
-                                    max_charge_current=env.config['charging_station']['max_charge_current'],
-                                    min_charge_current=env.config['charging_station']['min_charge_current'],
-                                    max_discharge_current=max_discharge_current,
-                                    min_discharge_current=min_discharge_current,
-                                    phases=env.config['charging_station']['phases'],
-                                    voltage=env.config['charging_station']['voltage'],
-                                    timescale=env.timescale,
-                                    verbose=env.verbose,)
+    for i in range(env.cs):
+        ev_charger = EV_Charger(id=i,
+                                connected_bus=0,  # env.cs_buses[i],
+                                connected_transformer=env.cs_transformers[i],
+                                n_ports=env.number_of_ports_per_cs,
+                                max_charge_current=env.config['charging_station']['max_charge_current'],
+                                min_charge_current=env.config['charging_station']['min_charge_current'],
+                                max_discharge_current=max_discharge_current,
+                                min_discharge_current=min_discharge_current,
+                                phases=env.config['charging_station']['phases'],
+                                voltage=env.config['charging_station']['voltage'],
+                                timescale=env.timescale,
+                                verbose=env.verbose,)
 
-            charging_stations.append(ev_charger)
-        return charging_stations
+        charging_stations.append(ev_charger)
+    return charging_stations
 
 
 def load_ev_profiles(env) -> List[EV]:
@@ -400,7 +329,7 @@ def load_electricity_prices(env) -> Tuple[np.ndarray, np.ndarray]:
     if env.price_data is None:
         # else load historical prices
         file_path = pkg_resources.resource_filename(
-            'ev2gym', 'data/Netherlands_day-ahead-2015-2024.csv')
+            'ev2gym_driveway', 'data/Netherlands_day-ahead-2015-2024.csv')
         env.price_data = pd.read_csv(file_path, sep=',', header=0)
         drop_columns = ['Country', 'Datetime (Local)']        
 
@@ -453,7 +382,7 @@ def load_electricity_prices(env) -> Tuple[np.ndarray, np.ndarray]:
 
 def load_weekly_EV_profiles(env) -> List[dict]:
     vehicle_profiles_by_day_file = pkg_resources.resource_filename(
-        'ev2gym', 'data/vehicle_profiles_by_day.parquet')
+        'ev2gym_driveway', 'data/vehicle_profiles_by_day.parquet')
     
     df = pd.read_parquet(vehicle_profiles_by_day_file)
 

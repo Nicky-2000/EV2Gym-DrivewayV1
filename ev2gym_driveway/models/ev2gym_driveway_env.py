@@ -16,43 +16,33 @@ import yaml
 import json
 
 # from .grid import Grid
-from ev2gym.models.replay import EvCityReplay
-from ev2gym.visuals.plots import ev_city_plot, visualize_step
-from ev2gym.utilities.utils import EV_spawner_for_driveways, get_statistics, print_statistics, calculate_charge_power_potential, spawn_single_EV
-from ev2gym.utilities.loaders import load_ev_spawn_scenarios, load_power_setpoints, load_transformers, load_ev_charger_profiles, load_ev_profiles, load_electricity_prices, load_weekly_EV_profiles
-from ev2gym.visuals.render import Renderer
-from ev2gym.models.Household import Household
-from ev2gym.models.ev_charger import EV_Charger
-from ev2gym.models.ev import EV
+from ev2gym_driveway.models.replay import EvCityReplay
+from ev2gym_driveway.visuals.plots import ev_city_plot, visualize_step
+from ev2gym_driveway.utilities.utils import EV_spawner_for_driveways, get_statistics, print_statistics, calculate_charge_power_potential, spawn_single_EV
+from ev2gym_driveway.utilities.loaders import load_ev_spawn_scenarios, load_power_setpoints, load_transformers, load_ev_charger_profiles, load_ev_profiles, load_electricity_prices, load_weekly_EV_profiles
+from ev2gym_driveway.visuals.render import Renderer
+from ev2gym_driveway.models.Household import Household
+from ev2gym_driveway.models.ev_charger import EV_Charger
+from ev2gym_driveway.models.ev import EV
 
 
-from ev2gym.rl_agent.reward import SquaredTrackingErrorReward
-from ev2gym.rl_agent.state import PublicPST
+from ev2gym_driveway.rl_agent.reward import SquaredTrackingErrorReward
+from ev2gym_driveway.rl_agent.state import PublicPST
 
 
-class EV2Gym(gym.Env):
+class EV2GymDriveway(gym.Env):
 
     def __init__(self,
                  config_file=None,
-                 load_from_replay_path=None,  # path of replay file to load
-                 replay_save_path='./replay/',  # where to save the replay file
-                 generate_rnd_game=True,  # generate a random game without terminating conditions
                  seed=None,
-                 save_replay=False,
-                 save_plots=False,
                  state_function=PublicPST,
                  reward_function=SquaredTrackingErrorReward,
                  cost_function=None,  # cost function to use in the simulation
-                 eval_mode="Normal",  # eval mode can be "Normal", "Unstirred" or "Optimal" in order to save the correct statistics in the replay file
-                 lightweight_plots=False,
                  # whether to empty the ports at the end of the simulation or not
-                 empty_ports_at_end_of_simulation=True,
-                 extra_sim_name=None,
                  verbose=False,
-                 render_mode=None,
                  ):
 
-        super(EV2Gym, self).__init__()
+        super(EV2GymDriveway, self).__init__()
 
         if verbose:
             print(f'Initializing EV2Gym environment...')
@@ -61,20 +51,7 @@ class EV2Gym(gym.Env):
         assert config_file is not None, "Please provide a config file!!!"
         self.config = yaml.load(open(config_file, 'r'), Loader=yaml.FullLoader)
 
-        self.generate_rnd_game = generate_rnd_game
-        self.load_from_replay_path = load_from_replay_path
-        self.empty_ports_at_end_of_simulation = empty_ports_at_end_of_simulation
-        self.save_replay = save_replay
-        self.save_plots = save_plots
-        self.lightweight_plots = lightweight_plots
-        self.eval_mode = eval_mode
         self.verbose = verbose  # Whether to print the simulation progress or not
-        # Whether to render the simulation in real-time or not
-        self.render_mode = render_mode
-
-        self.simulation_length = self.config['simulation_length']
-
-        self.replay_path = replay_save_path
 
         cs = self.config['number_of_charging_stations']
 
@@ -84,9 +61,9 @@ class EV2Gym(gym.Env):
 
         if seed is None:
             self.seed = np.random.randint(0, 1000000)
-            # print(f"Random seed: {self.seed}")
         else:
             self.seed = seed
+        
         # set random seed
         np.random.seed(self.seed)
         random.seed(self.seed)
@@ -95,114 +72,47 @@ class EV2Gym(gym.Env):
         if self.tr_seed == -1:
             self.tr_seed = self.seed
         self.tr_rng = np.random.default_rng(seed=self.tr_seed)
-
-        if load_from_replay_path is not None:
-            with open(load_from_replay_path, 'rb') as file:
-                self.replay = pickle.load(file)
-
-            sim_name = self.replay.replay_path.split(
-                'replay_')[-1].split('.')[0]
-            self.sim_name = sim_name + '_replay'
-            self.sim_date = self.replay.sim_date
-            self.timescale = self.replay.timescale
-            self.cs = self.replay.n_cs
-            self.number_of_transformers = self.replay.n_transformers
-            self.number_of_ports_per_cs = self.replay.max_n_ports
-            self.scenario = self.replay.scenario
-            self.heterogeneous_specs = self.replay.heterogeneous_specs
-
-        else:
-            assert cs is not None, "Please provide the number of charging stations"
-            self.cs = cs  # Number of charging stations
-            # Threshold for the user satisfaction score
-
-            self.number_of_ports_per_cs = self.config['number_of_ports_per_cs']
-            self.number_of_transformers = self.config['number_of_transformers']
-            self.timescale = self.config['timescale']
-            self.scenario = self.config['scenario']
-            self.simulation_length = int(self.config['simulation_length'])
-            # Simulation time
-
-            if self.config['random_day']:
-                if "random_hour" in self.config:
-                    if self.config["random_hour"]:
-                        self.config['hour'] = random.randint(5, 15)
-
-                self.sim_date = datetime.datetime(2022,
-                                                  1,
-                                                  1,
-                                                  self.config['hour'],
-                                                  self.config['minute'],
-                                                  ) + datetime.timedelta(days=random.randint(0, int(1.5*365)))
-
-                if self.scenario == 'workplace':
-                    # dont simulate weekends
-                    while self.sim_date.weekday() > 4:
-                        self.sim_date += datetime.timedelta(days=1)
-
-                if self.config['simulation_days'] == "weekdays":
-                    # dont simulate weekends
-                    while self.sim_date.weekday() > 4:
-                        self.sim_date += datetime.timedelta(days=1)
-                elif self.config['simulation_days'] == "weekends" and self.scenario != 'workplace':
-                    # simulate only weekends
-                    while self.sim_date.weekday() < 5:
-                        self.sim_date += datetime.timedelta(days=1)
-            else:
-
-                self.sim_date = datetime.datetime(self.config['year'],
-                                                  self.config['month'],
-                                                  self.config['day'],
-                                                  self.config['hour'],
-                                                  self.config['minute'])
-            self.replay = None
-            self.sim_name = f'sim_' + \
-                f'{datetime.datetime.now().strftime("%Y_%m_%d_%f")}'
-
-            self.heterogeneous_specs = self.config['heterogeneous_ev_specs']
-
-        # Whether to simulate the grid or not (Future feature...)
-        self.simulate_grid = False
-
-        self.stats = None
-        # if self.cs > 100:
-        # self.lightweight_plots = True
+        
+        assert cs is not None, "Please provide the number of charging stations"
+        self.cs = cs  # Number of charging stations
+        
+        
+        self.number_of_ports_per_cs = self.config['number_of_ports_per_cs']
+        self.number_of_transformers = self.config['number_of_transformers']
+        self.timescale = self.config['timescale']
+        self.scenario = self.config['scenario']
+        self.simulation_length = int(self.config['simulation_length'])
+        
+        # Simulation time
+        self.sim_date = datetime.datetime(self.config['year'],
+                                            self.config['month'],
+                                            self.config['day'],
+                                            self.config['hour'],
+                                            self.config['minute'])
         self.sim_starting_date = self.sim_date
 
-        # Read the config.charging_network_topology json file and read the topology
-        try:
-            with open(self.config['charging_network_topology']) as json_file:
-                self.charging_network_topology = json.load(json_file)
+        self.sim_name = f'sim_' + \
+            f'{datetime.datetime.now().strftime("%Y_%m_%d_%f")}'
 
-        except FileNotFoundError:
-            if not self.config['charging_network_topology'] == 'None':
-                print(
-                    f'Did not find file {self.config["charging_network_topology"]}')
-            self.charging_network_topology = None
 
-        self.sim_name = extra_sim_name + \
-            self.sim_name if extra_sim_name is not None else self.sim_name
+        self.heterogeneous_specs = self.config['heterogeneous_ev_specs']
+        self.stats = None
 
-        # Simulate grid
-        if self.simulate_grid:
-            pass
-            # self.grid = Grid(charging_stations=self.cs, case=case)
-            # self.cs_buses = self.grid.get_charging_stations_buses()
-            # self.cs_transformers = self.grid.get_bus_transformers()
-        else:
-            # self.cs_buses = [None] * self.cs
-            if self.charging_network_topology is None:
-                self.cs_transformers = [
-                    *np.arange(self.number_of_transformers)] * (self.cs // self.number_of_transformers)
-                self.cs_transformers += random.sample(
-                    [*np.arange(self.number_of_transformers)], self.cs % self.number_of_transformers)
-                random.shuffle(self.cs_transformers)
+        # Set up the transformers
+        self.cs_transformers = [
+            *np.arange(self.number_of_transformers)] * (self.cs // self.number_of_transformers)
+        
+        self.cs_transformers += random.sample(
+            [*np.arange(self.number_of_transformers)], self.cs % self.number_of_transformers)
+        random.shuffle(self.cs_transformers)
 
+        
         # Instatiate Transformers
         self.transformers = load_transformers(self)
+        self.n_transformers = len(self.transformers)
         for tr in self.transformers:
             tr.reset(step=0)
-
+            
         # Instatiate Charging Stations
         self.charging_stations = load_ev_charger_profiles(self)
         for cs in self.charging_stations:
@@ -213,22 +123,18 @@ class EV2Gym(gym.Env):
             [cs.n_ports for cs in self.charging_stations]).sum()
 
         # Load EV spawn scenarios
-        if self.load_from_replay_path is None:
-            load_ev_spawn_scenarios(self)
+        load_ev_spawn_scenarios(self)
 
         # Spawn EVs
-        self.weekly_EV_profiles: list[dict] = load_weekly_EV_profiles(self)
         self.EVs_for_driveways: list[EV] = EV_spawner_for_driveways(self)
+        self.weekly_EV_profiles: list[dict] = load_weekly_EV_profiles(self)
         
-        # Initialize Households
+        # Initialize Households (Driveways)
         self.Households: list[Household] = []
         for cs, ev, ev_profile in zip(self.charging_stations, self.EVs_for_driveways , self.weekly_EV_profiles):
             household = Household(charging_station=cs, ev=ev, ev_weekly_profile=ev_profile, timescale=self.timescale)
             self.Households.append(household)
         
-
-        self.EVs_profiles = load_ev_profiles(self)
-        self.EVs = []
 
         # Load Electricity prices for every charging station
         self.price_data = None
@@ -245,18 +151,6 @@ class EV2Gym(gym.Env):
         # Variable showing whether the simulation is done or not
         self.done = False
 
-        # Make folders for results
-        if self.save_replay:
-            os.makedirs(self.replay_path, exist_ok=True)
-
-        if self.render_mode:
-            # Initialize the rendering of the simulation
-            self.renderer = Renderer(self)
-
-        if self.save_plots:
-            os.makedirs("./results", exist_ok=True)
-            print(f"Creating directory: ./results/{self.sim_name}")
-            os.makedirs(f"./results/{self.sim_name}", exist_ok=True)
 
         # Action space: is a vector of size "Sum of all ports of all charging stations"
         high = np.ones([self.number_of_ports])
@@ -300,46 +194,16 @@ class EV2Gym(gym.Env):
 
         for tr in self.transformers:
             tr.reset(step=self.current_step)
-
-        if self.load_from_replay_path is not None or not self.config['random_day']:
-            self.sim_date = self.sim_starting_date
-        else:
-            # select random date in range
-
-            if "random_hour" in self.config:
-                if self.config["random_hour"]:
-                    self.config['hour'] = random.randint(5, 15)
-
-            self.sim_date = datetime.datetime(2022,
-                                              1,
-                                              1,
-                                              self.config['hour'],
-                                              self.config['minute'],
-                                              ) + datetime.timedelta(days=random.randint(0, int(1.5*365)))
-
-            if self.scenario == 'workplace':
-                # dont simulate weekends
-                while self.sim_date.weekday() > 4:
-                    self.sim_date += datetime.timedelta(days=1)
-
-            if self.config['simulation_days'] == "weekdays":
-                # dont simulate weekends
-                while self.sim_date.weekday() > 4:
-                    self.sim_date += datetime.timedelta(days=1)
-            elif self.config['simulation_days'] == "weekends" and self.scenario != 'workplace':
-                # simulate only weekends
-                while self.sim_date.weekday() < 5:
-                    self.sim_date += datetime.timedelta(days=1)
-
+        
+        # TODO: Might need to reset the households
+        
+        
+        
+        # Reset the simulation date
+        self.sim_date = self.sim_starting_date
         self.sim_starting_date = self.sim_date
-        self.EVs_profiles = load_ev_profiles(self)
+        
         self.power_setpoints = load_power_setpoints(self)
-        self.EVs = []
-
-        # print(f'Simulation starting date: {self.sim_date}')
-
-        # self.sim_name = f'ev_city_{self.simulation_length}_' + \
-        # f'{datetime.datetime.now().strftime("%Y-%m-%d_%H-%M")}'
 
         self.init_statistic_variables()
 
@@ -350,18 +214,11 @@ class EV2Gym(gym.Env):
         Initializes the variables used for keeping simulation statistics
         '''
         self.current_step = 0
-        self.total_evs_spawned = 0
         self.total_reward = 0
 
-        self.current_ev_departed = 0
-        self.current_ev_arrived = 0
-        self.current_evs_parked = 0
 
         self.previous_power_usage = self.current_power_usage
         self.current_power_usage = np.zeros(self.simulation_length)
-
-        # self.transformer_amps = np.zeros([self.number_of_transformers,
-        #                                   self.simulation_length])
 
         self.cs_power = np.zeros([self.cs, self.simulation_length])
         self.cs_current = np.zeros([self.cs, self.simulation_length])
@@ -375,33 +232,24 @@ class EV2Gym(gym.Env):
         self.tr_solar_power = np.zeros(
             [self.number_of_transformers, self.simulation_length])
 
-        # self.port_power = np.zeros([self.number_of_ports,
-        #                             self.cs,
-        #                             self.simulation_length],
-        #                            dtype=np.float16)
-        if not self.lightweight_plots:
-            self.port_current = np.zeros([self.number_of_ports,
-                                          self.cs,
-                                          self.simulation_length],
-                                         dtype=np.float16,
-                                         )
-            self.port_current_signal = np.zeros([self.number_of_ports,
-                                                 self.cs,
-                                                 self.simulation_length],
-                                                dtype=np.float16,
-                                                )
+        self.port_current = np.zeros([self.number_of_ports,
+                                        self.cs,
+                                        self.simulation_length],
+                                        dtype=np.float16,
+                                        )
+        self.port_current_signal = np.zeros([self.number_of_ports,
+                                                self.cs,
+                                                self.simulation_length],
+                                            dtype=np.float16,
+                                            )
 
-            self.port_energy_level = np.zeros([self.number_of_ports,
-                                               self.cs,
-                                               self.simulation_length],
-                                              dtype=np.float16)
-            # self.port_charging_cycles = np.zeros([self.number_of_ports,
-            #                                       self.cs,
-            #                                       self.simulation_length],
-            #                                      dtype=np.float16)
-            self.port_arrival = dict({f'{j}.{i}': []
-                                      for i in range(self.number_of_ports)
-                                      for j in range(self.cs)})
+        self.port_energy_level = np.zeros([self.number_of_ports,
+                                            self.cs,
+                                            self.simulation_length],
+                                            dtype=np.float16)
+        self.port_arrival = dict({f'{j}.{i}': []
+                                    for i in range(self.number_of_ports)
+                                    for j in range(self.cs)})
 
         self.done = False
 
@@ -422,11 +270,7 @@ class EV2Gym(gym.Env):
 
         total_costs = 0
         total_invalid_action_punishment = 0
-        user_satisfaction_list = []
         self.departing_evs = []
-
-        self.current_ev_departed = 0
-        self.current_ev_arrived = 0
 
         port_counter = 0
 
@@ -434,10 +278,11 @@ class EV2Gym(gym.Env):
         for tr in self.transformers:
             tr.reset(step=self.current_step)
 
-        # Call step for each charging station and spawn EVs where necessary
+        # Call step for each household
         for i, household in enumerate(self.Households):
             cs: EV_Charger = household.charging_station
             n_ports = household.charging_station.n_ports
+            
             assert n_ports == 1, "Only one port is supported for now"
             
             invalid_action_punishment = household.step(
@@ -456,26 +301,6 @@ class EV2Gym(gym.Env):
 
             port_counter += n_ports
 
-        
-        # # Spawn EVs
-        # counter = self.total_evs_spawned
-        # for i, ev in enumerate(self.EVs_profiles[counter:]):
-        #     if ev.time_of_arrival == self.current_step + 1:
-        #         ev = deepcopy(ev)
-        #         ev.reset()
-        #         ev.simulation_length = self.simulation_length
-        #         index = self.charging_stations[ev.location].spawn_ev(ev)
-
-        #         if not self.lightweight_plots:
-        #             self.port_arrival[f'{ev.location}.{index}'].append(
-        #                 (self.current_step+1, ev.time_of_departure+1))
-
-        #         self.total_evs_spawned += 1
-        #         self.current_ev_arrived += 1
-        #         self.EVs.append(ev)
-
-        #     elif ev.time_of_arrival > self.current_step + 1:
-        #         break
 
         self._update_power_statistics()
 
@@ -486,18 +311,10 @@ class EV2Gym(gym.Env):
             self.charge_power_potential[self.current_step] = calculate_charge_power_potential(
                 self)
 
-        self.current_evs_parked += self.current_ev_arrived - self.current_ev_departed
-
-        # Call step for the grid
-        if self.simulate_grid:
-            # TODO: transform actions -> grid_actions
-            raise NotImplementedError
-            grid_report = self.grid.step(actions=actions)
-            reward = self._calculate_reward(grid_report)
-        else:
-            reward = self._calculate_reward(total_costs,
-                                            user_satisfaction_list,
-                                            total_invalid_action_punishment)
+        user_satisfaction_list = []
+        reward = self._calculate_reward(total_costs,
+                                        user_satisfaction_list,
+                                        total_invalid_action_punishment)
 
         if self.cost_function is not None:
             cost = self.cost_function(self,
@@ -506,11 +323,6 @@ class EV2Gym(gym.Env):
                                       total_invalid_action_punishment)
         else:
             cost = None
-
-        if visualize:
-            visualize_step(self)
-
-        self.render()
 
         return self._check_termination(reward, cost)
 

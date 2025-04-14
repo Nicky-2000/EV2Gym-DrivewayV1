@@ -7,12 +7,12 @@ import pkg_resources
 # Image URLs for graph nodes
 
 icons = {
-    "cpo": pkg_resources.resource_filename('ev2gym', "visuals/icons/cpo.png"),
-    "transformer": pkg_resources.resource_filename('ev2gym', "visuals/icons/transformer.png"),
-    "charger_1": pkg_resources.resource_filename('ev2gym', "visuals/icons/charging-station_1_port.png"),
-    "charger_2": pkg_resources.resource_filename('ev2gym', "visuals/icons/charging-station_2_ports.png"),
-    "charger_wallbox": pkg_resources.resource_filename('ev2gym', "visuals/icons/charger_wallbox.png"),
-    "ev": pkg_resources.resource_filename('ev2gym', "visuals/icons/ev.png")
+    "cpo": pkg_resources.resource_filename('ev2gym_driveway', "visuals/icons/cpo.png"),
+    "transformer": pkg_resources.resource_filename('ev2gym_driveway', "visuals/icons/transformer.png"),
+    "charger_1": pkg_resources.resource_filename('ev2gym_driveway', "visuals/icons/charging-station_1_port.png"),
+    "charger_2": pkg_resources.resource_filename('ev2gym_driveway', "visuals/icons/charging-station_2_ports.png"),
+    "charger_wallbox": pkg_resources.resource_filename('ev2gym_driveway', "visuals/icons/charger_wallbox.png"),
+    "ev": pkg_resources.resource_filename('ev2gym_driveway', "visuals/icons/ev.png")
 }
 
 
@@ -205,7 +205,7 @@ class Renderer():
 
         # add icon to the bottom of the figure
         image_path = pkg_resources.resource_filename(
-            'ev2gym', "visuals/icons/logo.png")
+            'ev2gym_driveway', "visuals/icons/logo.png")
         icon = PIL.Image.open(image_path)
         icon = icon.resize((100, 50), PIL.Image.LANCZOS)
         self.fig.figimage(icon, 20, 20, alpha=1, zorder=1)

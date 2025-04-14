@@ -16,7 +16,6 @@ class EV():
 
     Attributes:
         - id: unique identifier of the EV (uniquep per charging station)
-        - location: the location of the EV (charging station id)
         - battery_capacity_at_arrival: the battery capacity of the EV at arrival time in kWh
         - time_of_arrival: the time of arrival of the EV in the charging station in simulation timesteps
         - time_of_departure: the earliest time of departure of the EV in the charging station in simulation timesteps (if use_probabilistic_time_of_departure is False, then time_of_departure is equal to time_of_departure)
@@ -44,10 +43,7 @@ class EV():
 
     def __init__(self,
                  id,
-                 location,
                  battery_capacity_at_arrival,
-                 time_of_arrival,
-                 time_of_departure,
                  desired_capacity=None,  # kWh
                  battery_capacity=50,  # kWh
                  min_battery_capacity=10,  # kWh
@@ -66,12 +62,9 @@ class EV():
                  ):
 
         self.id = id
-        self.location = location
         self.timescale = timescale
 
         # EV simulation characteristics
-        self.time_of_arrival = time_of_arrival
-        self.time_of_departure = time_of_departure
         self.desired_capacity = battery_capacity if desired_capacity is None else desired_capacity
         self.battery_capacity_at_arrival = battery_capacity_at_arrival  # kWh
 
@@ -231,8 +224,6 @@ class EV():
     def __str__(self):
         return f' {self.current_energy*60/self.timescale :5.1f} kWh |' + \
             f' {(self.current_capacity/self.battery_capacity)*100:5.1f} % |' + \
-            f't_stay: {self.time_of_arrival}-' + \
-            f'{self.time_of_departure} |' + \
             f' {self.max_ac_charge_power}/' + \
             f'{self.max_discharge_power} kW |' + \
             f' {self.battery_capacity} kWh |'

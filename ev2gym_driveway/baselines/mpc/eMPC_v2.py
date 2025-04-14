@@ -10,7 +10,7 @@ from gurobipy import GRB
 from gurobipy import *
 import numpy as np
 
-from ev2gym.baselines.mpc.mpc import MPC
+from ev2gym_driveway.baselines.mpc.mpc import MPC
 
 
 class eMPC_V2G_v2(MPC):

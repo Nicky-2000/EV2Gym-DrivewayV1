@@ -5,7 +5,7 @@ This file is part of the ev2gym package. It is used to save the simulation data 
 import os
 import numpy as np
 import math
-from ev2gym.utilities.utils import get_statistics
+from ev2gym_driveway.utilities.utils import get_statistics
 
 class EvCityReplay():
     '''

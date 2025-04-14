@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import datetime
 import os
-from ev2gym.models.ev2gym_env import EV2Gym
+from ev2gym_driveway.models.ev2gym_driveway_env import EV2Gym
 
 
 marker_list = ['.', 'x', 'o', 'v', 's', 'p',

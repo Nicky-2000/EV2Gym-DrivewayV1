@@ -7,7 +7,7 @@ import numpy as np
 import roboschool
 import torch
 
-from ev2gym.baselines.DDPG.ddpg import DDPG
+from ev2gym_driveway.baselines.DDPG.ddpg import DDPG
 # from wrappers import NormalizedActions
 
 # Create logger

@@ -15,7 +15,7 @@ import sys
 sys.path.insert(0, os.path.abspath(".."))
 sys.path.insert(0, os.path.abspath("../ev2gym/"))
 
-project = 'EV2Gym'
+project = 'ev2gym_driveway'
 copyright = '2024, Stavros Orfanoudakis'
 author = 'Stavros Orfanoudakis'
 release = '4/2024'

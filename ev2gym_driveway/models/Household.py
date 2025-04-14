@@ -2,11 +2,11 @@
 This file contains the Household class which represents a household with an electric vehicle (EV) and a charging station.
 """
 
-from ev2gym.models.ev_charger import EV_Charger
-from ev2gym.models.ev import EV
+from ev2gym_driveway.models.ev_charger import EV_Charger
+from ev2gym_driveway.models.ev import EV
 
-from ev2gym.models.ev_charger import EV_Charger
-from ev2gym.models.ev import EV
+from ev2gym_driveway.models.ev_charger import EV_Charger
+from ev2gym_driveway.models.ev import EV
 from datetime import datetime, time
 
 
@@ -52,9 +52,10 @@ class Household:
                 trip["departure"] = round_hhmm_to_step(trip["departure"])
                 trip["arrival"] = round_hhmm_to_step(trip["arrival"])
                 # Some data checks
-                assert (
-                    trip["departure"] < trip["arrival"]
-                ), f"Departure time {trip['departure']} must be less than arrival time {trip['arrival']}"
+                if trip["departure"] == trip["arrival"]:
+                    # Just drop the trip right now
+                    continue
+                    
                 assert (
                     trip["arrival"] <= 2359
                 ), f"Arrival time {trip['arrival']} must be less than or equal to 2359"
