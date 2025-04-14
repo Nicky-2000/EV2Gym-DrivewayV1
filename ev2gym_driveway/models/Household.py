@@ -29,44 +29,7 @@ class Household:
         self.total_money_earned_discharging = 0
         self.total_invalid_action_punishment = 0
 
-    def _normalize_ev_profile(
-        self, weekly_profile: list[dict], step_minutes: int
-    ) -> list[dict]:
-        """
-        Normalize the EV weekly profile to ensure that all trips are rounded to the nearest simulation step size.
-        This makes checking for departure and arrival times easier.
-        """
 
-        def round_hhmm_to_step(hhmm: int) -> int:
-            hours, minutes = divmod(hhmm, 100)
-            total_minutes = hours * 60 + minutes
-            rounded = (total_minutes // step_minutes) * step_minutes
-            return (rounded // 60) * 100 + (rounded % 60)
-
-        normalized_profile = {}
-        for day, data in weekly_profile.items():
-            trips = data.get("trips", [])
-            normalized_trips = []
-            for trip in trips:
-                trip = trip.copy()
-                trip["departure"] = round_hhmm_to_step(trip["departure"])
-                trip["arrival"] = round_hhmm_to_step(trip["arrival"])
-                # Some data checks
-                if trip["departure"] == trip["arrival"]:
-                    # Just drop the trip right now
-                    continue
-                    
-                assert (
-                    trip["arrival"] <= 2359
-                ), f"Arrival time {trip['arrival']} must be less than or equal to 2359"
-                assert (
-                    trip["departure"] >= 0
-                ), f"Departure time {trip['departure']} must be greater than or equal to 0"
-
-                normalized_trips.append(trip)
-
-            normalized_profile[day] = {"trips": normalized_trips}
-        return normalized_profile
 
     def step(self, actions, charge_price, discharge_price, sim_timestamp):
         self.update_household(sim_timestamp)

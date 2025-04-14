@@ -13,7 +13,6 @@ env = EV2GymDriveway(config_file=config_file)
 state, _ = env.reset()
 
 # Create Agents
-agent = V2GProfitMaxOracle(env, verbose=True)  # optimal solution
 agent = ChargeAsFastAsPossible()  # heuristic
 
 for t in range(env.simulation_length):

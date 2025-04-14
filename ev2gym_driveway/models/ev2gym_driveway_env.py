@@ -13,8 +13,6 @@ import os
 import random
 import yaml
 
-from ev2gym_driveway.models.replay import EvCityReplay
-from ev2gym_driveway.visuals.plots import ev_city_plot, visualize_step
 from ev2gym_driveway.utilities.utils import (
     EV_spawner_for_driveways,
     calculate_charge_power_potential,
@@ -22,7 +20,6 @@ from ev2gym_driveway.utilities.utils import (
 from ev2gym_driveway.utilities.statistics import get_statistics
 from ev2gym_driveway.utilities.loaders import (
     load_ev_spawn_scenarios,
-    load_power_setpoints,
     load_transformers,
     load_ev_charger_profiles,
     load_electricity_prices,
@@ -33,8 +30,8 @@ from ev2gym_driveway.models.ev_charger import EV_Charger
 from ev2gym_driveway.models.ev import EV
 
 
-from ev2gym_driveway.rl_agent.reward import SquaredTrackingErrorReward
-from ev2gym_driveway.rl_agent.state import PublicPST
+from ev2gym_driveway.rl_agent.reward import ProfitMax_TrPenalty_UserIncentives
+from ev2gym_driveway.rl_agent.state import V2G_profit_max
 
 
 class EV2GymDriveway(gym.Env):
@@ -43,8 +40,8 @@ class EV2GymDriveway(gym.Env):
         self,
         config_file=None,
         seed=None,
-        state_function=PublicPST,
-        reward_function=SquaredTrackingErrorReward,
+        state_function=V2G_profit_max,
+        reward_function=ProfitMax_TrPenalty_UserIncentives,
         cost_function=None,  # cost function to use in the simulation
         # whether to empty the ports at the end of the simulation or not
         verbose=False,
@@ -156,8 +153,6 @@ class EV2GymDriveway(gym.Env):
         self.price_data = None
         self.charge_prices, self.discharge_prices = load_electricity_prices(self)
 
-        # Load power setpoint of simulation
-        self.power_setpoints = load_power_setpoints(self)
         self.current_power_usage = np.zeros(self.simulation_length)
         self.charge_power_potential = np.zeros(self.simulation_length)
 
@@ -214,8 +209,6 @@ class EV2GymDriveway(gym.Env):
         self.sim_date = self.sim_starting_date
         self.sim_starting_date = self.sim_date
 
-        self.power_setpoints = load_power_setpoints(self)
-
         self.init_statistic_variables()
 
         return self._get_observation(), {}
@@ -267,7 +260,7 @@ class EV2GymDriveway(gym.Env):
 
         self.done = False
 
-    def step(self, actions, visualize=False):
+    def step(self, actions):
         """'
         Takes an action as input and returns the next state, reward, and whether the episode is done
         Inputs:
@@ -408,27 +401,6 @@ class EV2GymDriveway(gym.Env):
             else:
                 return self._get_observation(), reward, False, truncated, stats
 
-    def render(self):
-        """Renders the simulation"""
-        if self.render_mode:
-            self.renderer.render()
-
-    def _save_sim_replay(self):
-        """Saves the simulation data in a pickle file"""
-        replay = EvCityReplay(self)
-        print(f"Saving replay file at {replay.replay_path}")
-        with open(replay.replay_path, "wb") as f:
-            pickle.dump(replay, f)
-
-        return replay.replay_path
-
-    def set_save_plots(self, save_plots):
-        if save_plots:
-            os.makedirs("./results", exist_ok=True)
-            print(f"Creating directory: ./results/{self.sim_name}")
-            os.makedirs(f"./results/{self.sim_name}", exist_ok=True)
-
-        self.save_plots = save_plots
 
     def _update_power_statistics(self):
         """Updates the power statistics of the simulation"""
@@ -465,12 +437,6 @@ class EV2GymDriveway(gym.Env):
                         ev.current_capacity / ev.battery_capacity
                     )
 
-            # for ev in self.departing_evs:
-            #     if not self.lightweight_plots:
-            #         self.port_energy_level[ev.id, ev.location, self.current_step] = \
-            #             ev.current_capacity/ev.battery_capacity
-            #         self.port_current[ev.id, ev.location,
-            #                           self.current_step] = ev.actual_current
 
     def _step_date(self):
         """Steps the simulation date by one timestep"""

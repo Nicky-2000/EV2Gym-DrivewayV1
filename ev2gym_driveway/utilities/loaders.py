@@ -4,18 +4,14 @@ This file contains the loaders for the EV City environment.
 
 import numpy as np
 import pandas as pd
-import math
 import os
 import datetime
 import pkg_resources
 import json
-from typing import List, Tuple
 
 from ev2gym_driveway.models.ev_charger import EV_Charger
 from ev2gym_driveway.models.ev import EV
 from ev2gym_driveway.models.transformer import Transformer
-
-from ev2gym_driveway.utilities.utils import EV_spawner, generate_power_setpoints, EV_spawner_GF
 
 
 def load_ev_spawn_scenarios(env) -> None:
@@ -78,17 +74,6 @@ def load_ev_spawn_scenarios(env) -> None:
     env.df_time_of_stay_vs_arrival = env.df_time_of_stay_vs_arrival.fillna(0)
     env.df_time_of_stay_vs_arrival = env.df_time_of_stay_vs_arrival.rename(columns={'work': 'workplace',
                                                                                     'home': 'private'})
-
-
-def load_power_setpoints(env) -> np.ndarray:
-    '''
-    Loads the power setpoints of the simulation based on the day-ahead prices
-    '''
-
-    if env.load_from_replay_path:
-        return env.replay.power_setpoints
-    else:
-        return generate_power_setpoints(env)
 
 
 def generate_residential_inflexible_loads(env) -> np.ndarray:
@@ -292,30 +277,7 @@ def load_ev_charger_profiles(env) -> List[EV_Charger]:
     return charging_stations
 
 
-def load_ev_profiles(env) -> List[EV]:
-    '''Loads the EV profiles of the simulation
-    If load_from_replay_path is None, then the EV profiles are created randomly
-
-    Returns:
-        - ev_profiles: a list of ev_profile objects'''
-
-    if env.load_from_replay_path is None:
-
-        if env.scenario == 'GF':
-            ev_profiles = EV_spawner_GF(env)
-            while len(ev_profiles) == 0:
-                ev_profiles = EV_spawner_GF(env)
-            return ev_profiles
-
-        ev_profiles = EV_spawner(env)
-        while len(ev_profiles) == 0:
-            ev_profiles = EV_spawner(env)
-
-        return ev_profiles
-    else:
-        return env.replay.EVs
-
-def load_electricity_prices(env) -> Tuple[np.ndarray, np.ndarray]:
+def load_electricity_prices(env) -> tuple[np.ndarray, np.ndarray]:
     '''Loads the electricity prices of the simulation
     If load_from_replay_path is None, then the electricity prices are created randomly
 
@@ -323,8 +285,8 @@ def load_electricity_prices(env) -> Tuple[np.ndarray, np.ndarray]:
         - charge_prices: a matrix of size (number of charging stations, simulation length) with the charge prices
         - discharge_prices: a matrix of size (number of charging stations, simulation length) with the discharge prices'''
 
-    if env.load_from_replay_path is not None:
-        return env.replay.charge_prices, env.replay.discharge_prices
+    # if env.load_from_replay_path is not None:
+    #     return env.replay.charge_prices, env.replay.discharge_prices
 
     if env.price_data is None:
         # else load historical prices
@@ -380,7 +342,7 @@ def load_electricity_prices(env) -> Tuple[np.ndarray, np.ndarray]:
     return charge_prices, discharge_prices
 
 
-def load_weekly_EV_profiles(env) -> List[dict]:
+def load_weekly_EV_profiles(env, timescale) -> list[dict]:
     vehicle_profiles_by_day_file = pkg_resources.resource_filename(
         'ev2gym_driveway', 'data/vehicle_profiles_by_day.parquet')
     
@@ -428,10 +390,46 @@ def load_weekly_EV_profiles(env) -> List[dict]:
 
         weekly_profiles.append(ev_week)
         
-    return weekly_profiles
+    return _normalize_ev_profile(weekly_profiles, timescale)
 
+def _normalize_ev_profile(
+    self, weekly_profile: list[dict], step_minutes: int
+) -> list[dict]:
+    """
+    Normalize the EV weekly profile to ensure that all trips are rounded to the nearest simulation step size.
+    This makes checking for departure and arrival times easier.
+    """
 
+    def round_hhmm_to_step(hhmm: int) -> int:
+        hours, minutes = divmod(hhmm, 100)
+        total_minutes = hours * 60 + minutes
+        rounded = (total_minutes // step_minutes) * step_minutes
+        return (rounded // 60) * 100 + (rounded % 60)
 
+    normalized_profile = {}
+    for day, data in weekly_profile.items():
+        trips = data.get("trips", [])
+        normalized_trips = []
+        for trip in trips:
+            trip = trip.copy()
+            trip["departure"] = round_hhmm_to_step(trip["departure"])
+            trip["arrival"] = round_hhmm_to_step(trip["arrival"])
+            # Some data checks
+            if trip["departure"] == trip["arrival"]:
+                # Just drop the trip right now
+                continue
+                
+            assert (
+                trip["arrival"] <= 2359
+            ), f"Arrival time {trip['arrival']} must be less than or equal to 2359"
+            assert (
+                trip["departure"] >= 0
+            ), f"Departure time {trip['departure']} must be greater than or equal to 0"
+
+            normalized_trips.append(trip)
+
+        normalized_profile[day] = {"trips": normalized_trips}
+    return normalized_profile
 
 
 def resolve_path(relative_path: str) -> str:

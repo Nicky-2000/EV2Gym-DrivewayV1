@@ -96,7 +96,6 @@ def spawn_single_EV(
 
         return EV(
             id=port,
-            location=cs_id,
             battery_capacity_at_arrival=initial_battery_capacity,
             max_ac_charge_power=env.ev_specs[sampled_ev]["max_ac_charge_power"],
             max_dc_charge_power=env.ev_specs[sampled_ev]["max_dc_charge_power"],
