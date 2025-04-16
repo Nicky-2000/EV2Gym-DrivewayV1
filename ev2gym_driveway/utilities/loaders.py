@@ -223,7 +223,7 @@ def generate_pv_generation(env) -> np.ndarray:
     return new_data.to_numpy().T
 
 
-def load_transformers(env) -> List[Transformer]:
+def load_transformers(env) -> list[Transformer]:
     """Loads the transformers of the simulation
     If load_from_replay_path is None, then the transformers are created randomly
 
@@ -265,7 +265,7 @@ def load_transformers(env) -> List[Transformer]:
     return transformers
 
 
-def load_ev_charger_profiles(env) -> List[EV_Charger]:
+def load_ev_charger_profiles(env) -> list[EV_Charger]:
     """Loads the EV charger profiles of the simulation
     If load_from_replay_path is None, then the EV charger profiles are created randomly
 
@@ -404,7 +404,7 @@ def load_electricity_prices(env) -> tuple[np.ndarray, np.ndarray]:
     return charge_prices, discharge_prices
 
 
-def load_weekly_EV_profiles(env, timescale) -> list[dict]:
+def load_weekly_EV_profiles(num_charging_stations, timescale) -> list[dict]:
     vehicle_profiles_by_day_file = pkg_resources.resource_filename(
         "ev2gym_driveway", "data/vehicle_profiles_by_day.parquet"
     )
@@ -425,7 +425,7 @@ def load_weekly_EV_profiles(env, timescale) -> list[dict]:
 
     weekly_profiles = []
 
-    for i in range(env.cs):  # One EV per charging station
+    for i in range(num_charging_stations):  # One EV per charging station
         ev_week = {}
         for day in range(1, 8):
             day_df = days_of_week[day]
@@ -437,16 +437,7 @@ def load_weekly_EV_profiles(env, timescale) -> list[dict]:
             # Make sure that each EV has a different seed. But still remain deterministic and reproducible
             seed = hash(f"{i}_{day}") % (2**32)
             sampled_row = day_df.sample(n=1, random_state=seed).iloc[0]
-            count = 0
-            while len(sampled_row["trips"]) == 0:
-                count += 1
-                if count > 10:
-                    print(
-                        f"Warning: No valid trip data found for EV {i} on {day_map[day]} after 10 attempts."
-                    )
-                    break
-                sampled_row = day_df.sample(n=1, random_state=seed + count).iloc[0]
-
+            
             trips = []
             for trip in sampled_row["trips"]:
                 departure = int(trip[0])
@@ -459,47 +450,51 @@ def load_weekly_EV_profiles(env, timescale) -> list[dict]:
 
         weekly_profiles.append(ev_week)
 
-    return _normalize_ev_profile(weekly_profiles, timescale)
+    return weekly_profiles
 
 
-def _normalize_ev_profile(
-    self, weekly_profile: list[dict], step_minutes: int
-) -> list[dict]:
-    """
-    Normalize the EV weekly profile to ensure that all trips are rounded to the nearest simulation step size.
-    This makes checking for departure and arrival times easier.
-    """
+# def _normalize_ev_profile(all_weekly_profiles: list[dict], step_minutes: int) -> list[dict]:
+#     """
+#     Normalize the EV weekly profile to ensure that all trips are rounded to the nearest simulation step size.
+#     This makes checking for departure and arrival times easier.
+#     """
 
-    def round_hhmm_to_step(hhmm: int) -> int:
-        hours, minutes = divmod(hhmm, 100)
-        total_minutes = hours * 60 + minutes
-        rounded = (total_minutes // step_minutes) * step_minutes
-        return (rounded // 60) * 100 + (rounded % 60)
+#     def round_hhmm_to_step(hhmm: int) -> int:
+#         hours, minutes = divmod(hhmm, 100)
+#         total_minutes = hours * 60 + minutes
+#         rounded = (total_minutes // step_minutes) * step_minutes
+#         return (rounded // 60) * 100 + (rounded % 60)
 
-    normalized_profile = {}
-    for day, data in weekly_profile.items():
-        trips = data.get("trips", [])
-        normalized_trips = []
-        for trip in trips:
-            trip = trip.copy()
-            trip["departure"] = round_hhmm_to_step(trip["departure"])
-            trip["arrival"] = round_hhmm_to_step(trip["arrival"])
-            # Some data checks
-            if trip["departure"] == trip["arrival"]:
-                # Just drop the trip right now
-                continue
+#     all_normalized_profiles = []
+    
+#     for weekly_profile in all_weekly_profiles:
+#         normalized_profile = {}
+#         for day, data in weekly_profile.items():
+#             trips = data.get("trips", [])
+#             normalized_trips = []
+#             for trip in trips:
+#                 trip = trip.copy()
+#                 trip["departure"] = round_hhmm_to_step(trip["departure"])
+#                 trip["arrival"] = round_hhmm_to_step(trip["arrival"])
+                
+#                 # Some data checks
+#                 if trip["departure"] == trip["arrival"]:
+#                     # Just drop the trip right now
+#                     continue
 
-            assert (
-                trip["arrival"] <= 2359
-            ), f"Arrival time {trip['arrival']} must be less than or equal to 2359"
-            assert (
-                trip["departure"] >= 0
-            ), f"Departure time {trip['departure']} must be greater than or equal to 0"
+#                 assert (
+#                     trip["arrival"] <= 2359
+#                 ), f"Arrival time {trip['arrival']} must be less than or equal to 2359"
+#                 assert (
+#                     trip["departure"] >= 0
+#                 ), f"Departure time {trip['departure']} must be greater than or equal to 0"
 
-            normalized_trips.append(trip)
+#                 normalized_trips.append(trip)
 
-        normalized_profile[day] = {"trips": normalized_trips}
-    return normalized_profile
+#             normalized_profile[day] = {"trips": normalized_trips}
+        
+#         all_normalized_profiles.append(normalized_profile)
+#     return normalized_profile
 
 
 def resolve_path(relative_path: str) -> str:

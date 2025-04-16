@@ -58,7 +58,6 @@ class EV2GymDriveway(gym.Env):
 
         self.verbose = verbose  # Whether to print the simulation progress or not
 
-        cs = self.config["number_of_charging_stations"]
 
         self.reward_function = reward_function
         self.state_function = state_function
@@ -78,8 +77,8 @@ class EV2GymDriveway(gym.Env):
             self.tr_seed = self.seed
         self.tr_rng = np.random.default_rng(seed=self.tr_seed)
 
-        assert cs is not None, "Please provide the number of charging stations"
-        self.cs = cs  # Number of charging stations
+        self.cs = self.config["number_of_charging_stations"]
+        assert self.cs is not None, "Please provide the number of charging stations"
 
         self.number_of_ports_per_cs = self.config["number_of_ports_per_cs"]
         self.number_of_transformers = self.config["number_of_transformers"]
@@ -134,7 +133,7 @@ class EV2GymDriveway(gym.Env):
 
         # Spawn EVs
         self.EVs_for_driveways: list[EV] = EV_spawner_for_driveways(self)
-        self.weekly_EV_profiles: list[dict] = load_weekly_EV_profiles(self)
+        self.weekly_EV_profiles: list[dict] = load_weekly_EV_profiles(self.cs, self.timescale)
 
         # Initialize Households (Driveways)
         self.Households: list[Household] = []
@@ -341,6 +340,7 @@ class EV2GymDriveway(gym.Env):
         """Checks if the episode is done or any constraint is violated"""
         truncated = False
         action_mask = np.zeros(self.number_of_ports)
+        
         # action mask is 1 if an EV is connected to the port
         for i, cs in enumerate(self.charging_stations):
             for j in range(cs.n_ports):
@@ -350,7 +350,6 @@ class EV2GymDriveway(gym.Env):
         # Check if the episode is done or any constraint is violated
         if self.current_step >= self.simulation_length or (
             any(tr.is_overloaded() > 0 for tr in self.transformers)
-            and not self.generate_rnd_game
         ):
             """Terminate if:
             - The simulation length is reached
@@ -369,22 +368,13 @@ class EV2GymDriveway(gym.Env):
             self.cost = cost
 
             if self.verbose:
-                print_statistics(self)
+                # print_statistics(self)
 
                 if any(tr.is_overloaded() for tr in self.transformers):
                     print(f"Transformer overloaded, {self.current_step} timesteps\n")
                 else:
                     print(f"Episode finished after {self.current_step} timesteps\n")
 
-            if self.save_replay:
-                self._save_sim_replay()
-
-            if self.save_plots:
-                # save the env as a pickle file
-                with open(f"./results/{self.sim_name}/env.pkl", "wb") as f:
-                    self.renderer = None
-                    pickle.dump(self, f)
-                ev_city_plot(self)
 
             if self.cost_function is not None:
                 return self._get_observation(), reward, True, truncated, self.stats
@@ -421,12 +411,11 @@ class EV2GymDriveway(gym.Env):
             self.cs_current[cs.id, self.current_step] = cs.current_total_amps
 
             for port in range(cs.n_ports):
-                if not self.lightweight_plots:
-                    self.port_current_signal[port, cs.id, self.current_step] = (
-                        cs.current_signal[port]
-                    )
+                self.port_current_signal[port, cs.id, self.current_step] = (
+                    cs.current_signal[port]
+                )
                 ev = cs.evs_connected[port]
-                if ev is not None and not self.lightweight_plots:
+                if ev is not None:
                     # self.port_power[port, cs.id,
                     #                 self.current_step] = ev.current_energy
                     self.port_current[port, cs.id, self.current_step] = (

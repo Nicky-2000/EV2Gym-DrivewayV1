@@ -252,7 +252,7 @@ def calculate_charge_power_potential(env) -> float:
         for port in range(cs.n_ports):
             ev = cs.evs_connected[port]
             if ev is not None:
-                if ev.get_soc() < 1 and ev.time_of_departure > env.current_step:
+                if ev.get_soc() < 1:  # and ev.time_of_departure > env.current_step:
                     phases = min(cs.phases, ev.ev_phases)
                     ev_current = (
                         ev.max_ac_charge_power * 1000 / (math.sqrt(phases) * cs.voltage)
