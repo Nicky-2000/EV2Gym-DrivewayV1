@@ -104,7 +104,14 @@ class EV():
 
         self.calendar_loss = 0
         self.cyclic_loss = 0
-
+    
+    def set_time_of_departure(self, time_of_departure: int):
+        self.time_of_departure = time_of_departure
+        
+    def update_battery_capacity_after_trip(self, miles_driven: float, consumption_kwh_per_mile: float = 0.30) -> None:
+        energy_used = miles_driven * consumption_kwh_per_mile
+        self.current_capacity = max(0, self.current_capacity - energy_used)
+        
     def reset(self):
         '''
         The reset method is used to reset the EV's status to the initial state.

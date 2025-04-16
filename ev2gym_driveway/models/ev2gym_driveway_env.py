@@ -17,7 +17,7 @@ from ev2gym_driveway.utilities.utils import (
     EV_spawner_for_driveways,
     calculate_charge_power_potential,
 )
-from ev2gym_driveway.utilities.statistics import get_statistics
+from ev2gym_driveway.utilities.statistics import get_statistics, print_statistics
 from ev2gym_driveway.utilities.loaders import (
     load_ev_spawn_scenarios,
     load_transformers,
@@ -44,7 +44,7 @@ class EV2GymDriveway(gym.Env):
         reward_function=ProfitMax_TrPenalty_UserIncentives,
         cost_function=None,  # cost function to use in the simulation
         # whether to empty the ports at the end of the simulation or not
-        verbose=False,
+        verbose=True,
     ):
 
         super(EV2GymDriveway, self).__init__()
@@ -136,7 +136,7 @@ class EV2GymDriveway(gym.Env):
         self.weekly_EV_profiles: list[dict] = load_weekly_EV_profiles(self.cs, self.timescale)
 
         # Initialize Households (Driveways)
-        self.Households: list[Household] = []
+        self.households: list[Household] = []
         for cs, ev, ev_profile in zip(
             self.charging_stations, self.EVs_for_driveways, self.weekly_EV_profiles
         ):
@@ -145,8 +145,9 @@ class EV2GymDriveway(gym.Env):
                 ev=ev,
                 ev_weekly_profile=ev_profile,
                 timescale=self.timescale,
+                sim_starting_date=self.sim_starting_date
             )
-            self.Households.append(household)
+            self.households.append(household)
 
         # Load Electricity prices for every charging station
         self.price_data = None
@@ -206,7 +207,6 @@ class EV2GymDriveway(gym.Env):
 
         # Reset the simulation date
         self.sim_date = self.sim_starting_date
-        self.sim_starting_date = self.sim_date
 
         self.init_statistic_variables()
 
@@ -285,7 +285,7 @@ class EV2GymDriveway(gym.Env):
             tr.reset(step=self.current_step)
 
         # Call step for each household
-        for i, household in enumerate(self.Households):
+        for i, household in enumerate(self.households):
             cs: EV_Charger = household.charging_station
             n_ports = household.charging_station.n_ports
 
@@ -368,7 +368,7 @@ class EV2GymDriveway(gym.Env):
             self.cost = cost
 
             if self.verbose:
-                # print_statistics(self)
+                print_statistics(self)
 
                 if any(tr.is_overloaded() for tr in self.transformers):
                     print(f"Transformer overloaded, {self.current_step} timesteps\n")
