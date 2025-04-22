@@ -35,7 +35,7 @@ class Household:
     def step(self, actions, charge_price, discharge_price, sim_timestamp):
         self.update_household(sim_timestamp)
 
-        if self.current_trip is not None:
+        if self.current_trip is None:
             self.charging_station.evs_connected[0] = (
                 self.ev
             )  # Assuming only one EV per household currently

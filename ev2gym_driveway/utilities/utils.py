@@ -127,7 +127,6 @@ def EV_spawner_for_driveways(env) -> list[EV]:
 
     scenario = env.scenario
 
-    ## WE SHOULD CHANGE THIS Probablyyyy
     for cs in env.charging_stations:
         assert (
             cs.n_ports == 1
