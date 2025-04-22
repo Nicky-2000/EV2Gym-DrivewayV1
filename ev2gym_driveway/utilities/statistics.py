@@ -2,6 +2,8 @@ import numpy as np
 
 
 def get_statistics(env) -> dict:
+    total_inflexible_load = np.sum( env.tr_inflexible_loads, axis=0)
+    
     # Get total Money Spent and Earned charging and discharging
     total_money_spent_charging = np.array(
         [household.total_money_spent_charging for household in env.households]
@@ -44,7 +46,7 @@ def get_statistics(env) -> dict:
     #     total_steps_min_emergency_battery_capacity_violation += (
     #         ev.min_emergency_battery_capacity_metric
     #     )
-
+    
     stats = {
         "total_energy_charged": total_energy_charged,
         "total_energy_discharged": total_energy_discharged,
@@ -61,11 +63,13 @@ def get_statistics(env) -> dict:
         # "battery_degradation_cycling": battery_degradation_cycling,
         "total_reward": env.total_reward,
     }
-
-
+    
+    
     return stats
 
 
 def print_statistics(env) -> None:
+    # We want a plot of the inflexible loads and the flexible loads. 
+    # and the total load profile
     for key, value in get_statistics(env).items():
         print(f"{key}: {value}")
