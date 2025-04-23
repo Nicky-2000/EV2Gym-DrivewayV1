@@ -1,6 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+from ev2gym_driveway.models.ev import EV
+
 def get_statistics(env) -> dict:
     
     # Get total Money Spent and Earned charging and discharging
@@ -22,6 +24,9 @@ def get_statistics(env) -> dict:
     total_transformer_overload = np.array(env.tr_overload).sum()
     
     # TODO: FIX BATTERY DEGRADATION... 
+    for household in env.households:
+        ev: EV = household.ev
+        ev.get_battery_degradation()
     # We need to calculate the total time the car was charging and use this info
 
     # calculate total batery degradation
