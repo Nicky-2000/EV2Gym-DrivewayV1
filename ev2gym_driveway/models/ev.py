@@ -109,6 +109,9 @@ class EV():
     
     def set_time_of_departure(self, time_of_departure: int):
         self.time_of_departure = time_of_departure
+
+    def set_time_of_arrival(self, time_of_arrival: int):
+        self.time_of_arrival = time_of_arrival
         
     def update_battery_capacity_after_trip(self, km_driven: float) -> None:
         energy_used = km_driven * self.drive_efficiency
