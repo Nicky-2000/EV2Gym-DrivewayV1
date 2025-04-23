@@ -59,6 +59,7 @@ class EV():
                  charge_efficiency=1, # can be a list of charge efficiencies for different current levels
                  discharge_efficiency=1, # can be a list of discharge efficiencies for different current levels
                  timescale=5,
+                 drive_efficiency=0.165, # kWh/km 
                  ):
 
         self.id = id
@@ -80,6 +81,7 @@ class EV():
         self.transition_soc = transition_soc
         self.transition_soc_multiplier = transition_soc_multiplier
         self.ev_phases = ev_phases
+        self.drive_efficiency = drive_efficiency  # kWh/km
 
         self.charge_efficiency = charge_efficiency
         self.discharge_efficiency = discharge_efficiency
@@ -108,9 +110,13 @@ class EV():
     def set_time_of_departure(self, time_of_departure: int):
         self.time_of_departure = time_of_departure
         
-    def update_battery_capacity_after_trip(self, miles_driven: float, consumption_kwh_per_mile: float = 0.30) -> None:
-        energy_used = miles_driven * consumption_kwh_per_mile
+    def update_battery_capacity_after_trip(self, km_driven: float) -> None:
+        energy_used = km_driven * self.drive_efficiency
+        print(f'EV {self.id} used {energy_used:.2f} kWh of energy during the trip.')
+        print(f"Energy Before Trip: {self.current_capacity:.2f} kWh")
+        print(f"Energy After Trip: {self.current_capacity - energy_used:.2f} kWh")
         self.current_capacity = max(0, self.current_capacity - energy_used)
+        self.desired_capacity = self.battery_capacity
         
     def reset(self):
         '''
@@ -401,41 +407,6 @@ class EV():
 
         assert given_energy <= 0
         return given_energy*60/self.timescale * 1000 / voltage
-
-    def calculate_max_energy_with_AFAP(self,
-                                       max_cs_power
-                                       ) -> None:
-        '''
-        The calculate_max_energy_with_AFAP method is used to calculate the maximum energy that the EV can receive
-        when charging as fast as possible (AFAP). This value is used to determine the user_satifaction metric of the EV.
-        '''
-
-        if abs(max_cs_power) > abs(self.max_ac_charge_power):
-            max_power = self.max_ac_charge_power
-        else:
-            max_power = max_cs_power
-
-        self.max_energy_AFAP = self.battery_capacity_at_arrival
-        
-        # if charge efficeincy is dict, then get the charge efficiency based on the current
-        if isinstance(self.charge_efficiency, dict):
-            # iterate over all values of charge efficiency and get the maximum
-            # charge efficiency
-            max_charge_efficiency = 0
-            for key, value in self.charge_efficiency.items():
-                if value > max_charge_efficiency:
-                    max_charge_efficiency = value
-            charge_efficiency = max_charge_efficiency/100                
-            
-        else:
-            charge_efficiency = self.charge_efficiency
-            
-        for _ in range(self.time_of_arrival, self.time_of_departure+1):
-            self.max_energy_AFAP += max_power * charge_efficiency * self.timescale / 60
-            self.max_energy_AFAP = self.my_ceil(self.max_energy_AFAP, 2)
-            if self.max_energy_AFAP > self.battery_capacity:
-                self.max_energy_AFAP = self.battery_capacity
-                break
 
     def get_battery_degradation(self) -> Tuple[float, float]:
         '''

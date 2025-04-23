@@ -1,8 +1,7 @@
 import numpy as np
-
+import matplotlib.pyplot as plt
 
 def get_statistics(env) -> dict:
-    total_inflexible_load = np.sum( env.tr_inflexible_loads, axis=0)
     
     # Get total Money Spent and Earned charging and discharging
     total_money_spent_charging = np.array(
@@ -71,5 +70,45 @@ def get_statistics(env) -> dict:
 def print_statistics(env) -> None:
     # We want a plot of the inflexible loads and the flexible loads. 
     # and the total load profile
+    plot_load_statistics(env)
     for key, value in get_statistics(env).items():
         print(f"{key}: {value}")
+        
+
+def plot_load_statistics(env, save_path="load_vs_usage.png"):
+    # total_inflexible_load: shape (T,) or (T, D), we reduce to (T,)
+    total_inflexible_load = np.sum(env.tr_inflexible_loads, axis=0)
+    
+    # current_power_usage: assumed shape (T,)
+    current_power_usage = env.current_power_usage
+
+    # Ensure both arrays are 1D and aligned
+    total_inflexible_load = np.sum(total_inflexible_load, axis=-1) if total_inflexible_load.ndim > 1 else total_inflexible_load
+    assert total_inflexible_load.shape == current_power_usage.shape, "Shape mismatch"
+
+    # Plotting
+    plt.figure(figsize=(12, 6))
+    plt.plot(total_inflexible_load, label="Total Inflexible Load", linewidth=2)
+    plt.plot(current_power_usage, label="Current Power Usage", linewidth=2)
+
+    # Emphasize when usage occurs during low inflexible load
+    low_load_threshold = np.percentile(total_inflexible_load, 25)
+    plt.fill_between(
+        x=np.arange(len(total_inflexible_load)),
+        y1=current_power_usage,
+        where=total_inflexible_load < low_load_threshold,
+        color='green',
+        alpha=0.2,
+        label="Usage During Low Load"
+    )
+
+    plt.xlabel("Timestep")
+    plt.ylabel("Power (kW or normalized)")
+    plt.title("Current Power Usage vs. Total Inflexible Load")
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+
+    # Save the plot
+    plt.savefig(save_path)
+    plt.close()

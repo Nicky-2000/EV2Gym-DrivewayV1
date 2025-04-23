@@ -404,7 +404,7 @@ def load_electricity_prices(env) -> tuple[np.ndarray, np.ndarray]:
     return charge_prices, discharge_prices
 
 
-def load_weekly_EV_profiles(num_charging_stations, timescale) -> list[dict]:
+def load_weekly_EV_profiles(num_charging_stations, reset_count) -> list[dict]:
     vehicle_profiles_by_day_file = pkg_resources.resource_filename(
         "ev2gym_driveway", "data/vehicle_profiles_by_day.parquet"
     )
@@ -435,9 +435,14 @@ def load_weekly_EV_profiles(num_charging_stations, timescale) -> list[dict]:
                 raise ValueError(f"No trip data available for day {day_map[day]}")
 
             # Make sure that each EV has a different seed. But still remain deterministic and reproducible
-            seed = hash(f"{i}_{day}") % (2**32)
+            seed = (hash(f"{i}_{day}") + reset_count) % (2**32)
             sampled_row = day_df.sample(n=1, random_state=seed).iloc[0]
-            
+            count = 1
+            while len(sampled_row["trips"]) == 0:
+                print( f"Warning: No trips found for EV {i} on {day_map[day]}. Resampling...")
+                # Resample 
+                sampled_row = day_df.sample(n=1, random_state=seed + count).iloc[0]
+                count += 1
             trips = []
             for trip in sampled_row["trips"]:
                 departure = int(trip[0])

@@ -69,7 +69,9 @@ class Household:
                 self.ev_is_home = True
                 self.current_trip_weekday = None
                 miles_driven = self.current_trip["miles"]
-                self.ev.update_battery_capacity_after_trip(miles_driven)
+                km_driven = miles_driven * 1.60934  # Convert miles to km
+                print(f"EV {self.ev.id} arrived from trip at {sim_timestamp}. Drove: {km_driven} km.")
+                self.ev.update_battery_capacity_after_trip(km_driven)
         
         # Check if the EV is leaving on a new trip
         self.current_trip = self._get_current_trip(day_profile, sim_timestamp)
@@ -136,6 +138,28 @@ class Household:
                 if sim_timestamp < departure:
                     return trip, days_ahead
         return None
+    
+    def reset(self):
+        self.total_money_spent_charging = 0
+        self.total_money_earned_discharging = 0
+        self.total_invalid_action_punishment = 0
+        self.current_trip = None
+        self.current_trip_weekday = None
+        self.ev.reset()
+        self.charging_station.reset()
+
+        self.ev_is_home = True
+
+        # Reset next trip info
+        next_trip, days_ahead = self._get_next_trip(self.sim_starting_date)
+        if next_trip:
+            next_trip_departure_time = _hhmm_to_datetime(next_trip["departure"], self.sim_starting_date, days_ahead)
+            next_trip_departure_time_step = timestamp_to_simulation_step(
+                self.sim_starting_date, self.timescale, next_trip_departure_time
+            )
+            self.ev.set_time_of_departure(next_trip_departure_time_step)
+        
+        self.ev.reset() # Reset the EV for this house
 
 
 def _hhmm_to_datetime(hhmm: int, simulation_timestamp: datetime, days_ahead: int = 0) -> datetime:

@@ -3,6 +3,17 @@
 
 import math
 
+def reward_function_profit_only(env, total_costs, user_satisfaction_list, invalid_action_punishment):
+    """
+    Rewards based on net money earned across all households (discharging - charging).
+    """
+    net_profit = 0
+    for household in env.households:
+        net_profit += household.total_money_earned_discharging
+        net_profit -= household.total_money_spent_charging
+
+    return net_profit
+
 def SquaredTrackingErrorReward(env,*args):
     '''This reward function is the squared tracking error that uses the minimum of the power setpoints and the charge power potential
     The reward is negative'''

@@ -3,6 +3,103 @@ import math
 import numpy as np
 
 
+import numpy as np
+
+def state_function_basic_profit_view(env):
+    """
+    Returns the observation vector for the agent.
+    Each household (1 port per charger) contributes a row to the observation matrix.
+    
+    Features per household:
+    - Current battery level (0 to 1)
+    - Current charge price
+    - Current discharge price
+    - Time of day (sin, cos encoding)
+    """
+
+    obs = []
+
+    for household in env.households:
+        ev = household.ev
+        cs = household.charging_station
+        time_step = env.current_step
+
+        # Battery level normalized
+        battery_level = ev.current_capacity / ev.battery_capacity
+
+        # Electricity prices
+        charge_price = env.charge_prices[cs.id, time_step]
+        discharge_price = env.discharge_prices[cs.id, time_step]
+
+        # Time encoding
+        minutes_in_day = 24 * 60
+        t_min = env.sim_date.hour * 60 + env.sim_date.minute
+        time_sin = np.sin(2 * np.pi * t_min / minutes_in_day)
+        time_cos = np.cos(2 * np.pi * t_min / minutes_in_day)
+
+        features = [
+            battery_level,
+            charge_price,
+            discharge_price,
+            time_sin,
+            time_cos
+        ]
+
+        obs.append(features)
+
+    return np.array(obs).flatten()
+
+import numpy as np
+
+def state_function_with_future_trip(env):
+    """
+    Extended state with future trip info.
+    
+    Features per household:
+    - Current battery level
+    - Current charge price
+    - Current discharge price
+    - Time of day (sin, cos)
+    - Energy required for next trip (kWh / capacity)
+    - Time until departure in minutes
+    """
+
+    obs = []
+
+    for household in env.households:
+        ev = household.ev
+        cs = household.charging_station
+        time_step = env.current_step
+
+        battery_level = ev.current_capacity / ev.battery_capacity
+        charge_price = env.charge_prices[cs.id, time_step]
+        discharge_price = env.discharge_prices[cs.id, time_step]
+
+        # Time encoding
+        minutes_in_day = 24 * 60
+        t_min = env.sim_date.hour * 60 + env.sim_date.minute
+        time_sin = np.sin(2 * np.pi * t_min / minutes_in_day)
+        time_cos = np.cos(2 * np.pi * t_min / minutes_in_day)
+
+        # Next trip info (fallback to 0 if not available)
+        energy_needed = ev.energy_required_for_next_trip if ev.energy_required_for_next_trip else 0.0
+        time_until_departure = (ev.time_of_departure - env.sim_date).total_seconds() / 60 if ev.time_of_departure else 0.0
+
+        features = [
+            battery_level,
+            charge_price,
+            discharge_price,
+            time_sin,
+            time_cos,
+            energy_needed / ev.battery_capacity,
+            time_until_departure / 1440.0,  # normalized over 1 day
+        ]
+
+        obs.append(features)
+
+    return np.array(obs).flatten()
+
+
 def PublicPST(env, *args):
     '''This state function is the public power setpoints
     The state is the public power setpoints

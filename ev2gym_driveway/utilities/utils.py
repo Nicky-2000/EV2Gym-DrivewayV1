@@ -111,6 +111,7 @@ def spawn_single_EV(
             desired_capacity=env.config["ev"]["desired_capacity"] * battery_capacity,
             ev_phases=3,
             timescale=env.timescale,
+            drive_efficiency=env.ev_specs[sampled_ev]["drive_efficiency"],
         )
     else:
         raise NotImplementedError("Must Use Heterogeneous EV specs for EV spawner")

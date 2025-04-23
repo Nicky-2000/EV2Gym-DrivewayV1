@@ -30,8 +30,8 @@ from ev2gym_driveway.models.ev_charger import EV_Charger
 from ev2gym_driveway.models.ev import EV
 
 
-from ev2gym_driveway.rl_agent.reward import ProfitMax_TrPenalty_UserIncentives
-from ev2gym_driveway.rl_agent.state import V2G_profit_max
+from ev2gym_driveway.rl_agent.reward import reward_function_profit_only
+from ev2gym_driveway.rl_agent.state import state_function_basic_profit_view
 
 
 class EV2GymDriveway(gym.Env):
@@ -40,11 +40,11 @@ class EV2GymDriveway(gym.Env):
         self,
         config_file=None,
         seed=None,
-        state_function=V2G_profit_max,
-        reward_function=ProfitMax_TrPenalty_UserIncentives,
+        state_function=state_function_basic_profit_view,
+        reward_function=reward_function_profit_only,
         cost_function=None,  # cost function to use in the simulation
         # whether to empty the ports at the end of the simulation or not
-        verbose=True,
+        verbose=False,
     ):
 
         super(EV2GymDriveway, self).__init__()
@@ -132,8 +132,10 @@ class EV2GymDriveway(gym.Env):
         load_ev_spawn_scenarios(self)
 
         # Spawn EVs
+        
         self.EVs_for_driveways: list[EV] = EV_spawner_for_driveways(self)
-        self.weekly_EV_profiles: list[dict] = load_weekly_EV_profiles(self.cs, self.timescale)
+        self.number_of_resets = 0 # used to make sure that random profiles are generated each time we reset
+        self.weekly_EV_profiles: list[dict] = load_weekly_EV_profiles(self.cs, self.timescale, self.number_of_resets)
 
         # Initialize Households (Driveways)
         self.households: list[Household] = []
@@ -202,8 +204,22 @@ class EV2GymDriveway(gym.Env):
 
         for tr in self.transformers:
             tr.reset(step=self.current_step)
+            
+        for household in self.households:
+            household.reset()
+            
+        for ev in self.EVs_for_driveways:
+            ev.reset()
+        
+        
+        self.number_of_resets += 1
+        # Re-sample weekly EV profiles (So we get new schedules)
+        self.weekly_EV_profiles = load_weekly_EV_profiles(self.cs, self.number_of_resets)
 
-        # TODO: Might need to reset the households
+        # Assign new profiles to each household
+        for household, new_profile in zip(self.households, self.weekly_EV_profiles):
+            household.ev_weekly_profile = new_profile
+            
 
         # Reset the simulation date
         self.sim_date = self.sim_starting_date
@@ -324,72 +340,92 @@ class EV2GymDriveway(gym.Env):
             total_costs, user_satisfaction_list, total_invalid_action_punishment
         )
 
-        if self.cost_function is not None:
-            cost = self.cost_function(
-                self,
-                total_costs,
-                user_satisfaction_list,
-                total_invalid_action_punishment,
-            )
-        else:
-            cost = None
+        # Assume cost function right now
+        # if self.cost_function is not None:
+        #     cost = self.cost_function(
+        #         self,
+        #         total_costs,
+        #         user_satisfaction_list,
+        #         total_invalid_action_punishment,
+        #     )
+        # else:
+        #     cost = None
 
-        return self._check_termination(reward, cost)
+        return self._check_termination(reward)
+    
+    def _check_termination(self, reward):
+        done = self.current_step >= self.simulation_length or any(tr.is_overloaded() for tr in self.transformers)
 
-    def _check_termination(self, reward, cost):
-        """Checks if the episode is done or any constraint is violated"""
-        truncated = False
-        action_mask = np.zeros(self.number_of_ports)
-        
-        # action mask is 1 if an EV is connected to the port
-        for i, cs in enumerate(self.charging_stations):
-            for j in range(cs.n_ports):
-                if cs.evs_connected[j] is not None:
-                    action_mask[i * cs.n_ports + j] = 1
+        info = {
+            "total_money_spent": sum(h.total_money_spent_charging for h in self.households),
+            "total_money_earned": sum(h.total_money_earned_discharging for h in self.households),
+            "total_invalid_penalty": sum(h.total_invalid_action_punishment for h in self.households),
+            "transformer_overloaded": any(tr.is_overloaded() for tr in self.transformers),
+            "current_step": self.current_step
+        }
 
-        # Check if the episode is done or any constraint is violated
-        if self.current_step >= self.simulation_length or (
-            any(tr.is_overloaded() > 0 for tr in self.transformers)
-        ):
-            """Terminate if:
-            - The simulation length is reached
-            - Any user satisfaction score is below the threshold
-            - Any charging station is overloaded
-            Dont terminate when overloading if :
-            - generate_rnd_game is True
-            Carefull: if generate_rnd_game is True,
-            the simulation might end up in infeasible problem
-            """
-
+        if done:
             self.done = True
-            self.stats = get_statistics(self)
+        
+        if done:
+            print_statistics(self)
 
-            self.stats["action_mask"] = action_mask
-            self.cost = cost
+        return self._get_observation(), reward, done, False, info
 
-            if self.verbose:
-                print_statistics(self)
+    # def _check_termination(self, reward, cost):
+    #     """Checks if the episode is done or any constraint is violated"""
+    #     truncated = False
+    #     action_mask = np.zeros(self.number_of_ports)
+        
+    #     # action mask is 1 if an EV is connected to the port
+    #     for i, cs in enumerate(self.charging_stations):
+    #         for j in range(cs.n_ports):
+    #             if cs.evs_connected[j] is not None:
+    #                 action_mask[i * cs.n_ports + j] = 1
 
-                if any(tr.is_overloaded() for tr in self.transformers):
-                    print(f"Transformer overloaded, {self.current_step} timesteps\n")
-                else:
-                    print(f"Episode finished after {self.current_step} timesteps\n")
+    #     # Check if the episode is done or any constraint is violated
+    #     if self.current_step >= self.simulation_length or (
+    #         any(tr.is_overloaded() > 0 for tr in self.transformers)
+    #     ):
+    #         """Terminate if:
+    #         - The simulation length is reached
+    #         - Any user satisfaction score is below the threshold
+    #         - Any charging station is overloaded
+    #         Dont terminate when overloading if :
+    #         - generate_rnd_game is True
+    #         Carefull: if generate_rnd_game is True,
+    #         the simulation might end up in infeasible problem
+    #         """
+
+    #         self.done = True
+    #         self.stats = get_statistics(self)
+
+    #         self.stats["action_mask"] = action_mask
+    #         self.cost = cost
+
+    #         if self.verbose:
+    #             print_statistics(self)
+
+    #             if any(tr.is_overloaded() for tr in self.transformers):
+    #                 print(f"Transformer overloaded, {self.current_step} timesteps\n")
+    #             else:
+    #                 print(f"Episode finished after {self.current_step} timesteps\n")
 
 
-            if self.cost_function is not None:
-                return self._get_observation(), reward, True, truncated, self.stats
-            else:
-                return self._get_observation(), reward, True, truncated, self.stats
-        else:
-            stats = {
-                "cost": cost,
-                "action_mask": action_mask,
-            }
+    #         if self.cost_function is not None:
+    #             return self._get_observation(), reward, True, truncated, self.stats
+    #         else:
+    #             return self._get_observation(), reward, True, truncated, self.stats
+    #     else:
+    #         stats = {
+    #             "cost": cost,
+    #             "action_mask": action_mask,
+    #         }
 
-            if self.cost_function is not None:
-                return self._get_observation(), reward, False, truncated, stats
-            else:
-                return self._get_observation(), reward, False, truncated, stats
+    #         if self.cost_function is not None:
+    #             return self._get_observation(), reward, False, truncated, stats
+    #         else:
+    #             return self._get_observation(), reward, False, truncated, stats
 
 
     def _update_power_statistics(self):
@@ -405,6 +441,10 @@ class EV2GymDriveway(gym.Env):
             self.tr_solar_power[tr.id, self.current_step] = tr.solar_power[
                 self.current_step
             ]
+            self.EV_charging_power = [tr.id]
+        
+        # f' EVs: {(self.current_power-self.inflexible_load[self.current_step] - self.solar_power[self.current_step]):5.1f}) /' + \
+
 
         for cs in self.charging_stations:
             self.cs_power[cs.id, self.current_step] = cs.current_power_output
