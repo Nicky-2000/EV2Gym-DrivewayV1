@@ -176,6 +176,8 @@ class EV2GymDriveway(gym.Env):
 
         # Variable showing whether the simulation is done or not
         self.done = False
+        # Current step of the simulation out of a default of 672 max steps
+        self.current_step = 0
 
         # Action space: is a vector of size "Sum of all ports of all charging stations"
         high = np.ones([self.number_of_ports])
@@ -210,6 +212,7 @@ class EV2GymDriveway(gym.Env):
             self.tr_seed = self.seed
         self.tr_rng = np.random.default_rng(seed=self.tr_seed)
 
+        self.done = False
         self.current_step = 0
         self.stats = None
         # Reset all charging stations
@@ -243,7 +246,7 @@ class EV2GymDriveway(gym.Env):
         # Reset the simulation date
         self.sim_date = self.sim_starting_date
 
-        # self.init_statistic_variables()
+        self.init_statistic_variables() #uncommented in
 
         return self._get_observation(), {}
 

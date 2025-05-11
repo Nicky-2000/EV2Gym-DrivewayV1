@@ -2,9 +2,6 @@
 import math
 import numpy as np
 
-
-import numpy as np
-
 def state_function_basic_profit_view(env):
     """
     Returns the observation vector for the agent.

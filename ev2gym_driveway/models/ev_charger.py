@@ -132,7 +132,7 @@ class EV_Charger:
         self.current_discharge_price = discharge_price
         self.current_signal = []
 
-        assert (len(actions) == self.n_ports)
+        assert (len(actions) == self.n_ports), str(len(actions)) + " " + str(self.n_ports)
         # if no EV is connected, set action to 0
         invalid_action_punishment = 0
         for i in range(len(actions)):
