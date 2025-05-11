@@ -1,7 +1,17 @@
+from dataclasses import dataclass
 import numpy as np
 import matplotlib.pyplot as plt
 
 from ev2gym_driveway.models.ev import EV
+
+@dataclass
+class Statistics:
+    cs_power_usage: np.ndarray
+    cs_current: np.ndarray
+    tr_inflexible_loads: np.ndarray
+    tr_overload: np.ndarray
+    money_spent_at_each_step: np.ndarray
+    money_earned_at_each_step: np.ndarray
 
 def get_statistics(env) -> dict:
     
@@ -24,13 +34,13 @@ def get_statistics(env) -> dict:
     total_transformer_overload = np.array(env.tr_overload).sum()
     
     # TODO: FIX BATTERY DEGRADATION... 
-    for household in env.households:
-        ev: EV = household.ev
-        ev.get_battery_degradation()
+    # for household in env.households:
+    #     ev: EV = household.ev
+    #     ev.get_battery_degradation()
+    
     # We need to calculate the total time the car was charging and use this info
-
     # calculate total batery degradation
-    evs = [household.ev for household in env.households]
+    # evs = [household.ev for household in env.households]
     
     # battery_degradation = np.array(
     #     [np.array(ev.get_battery_degradation()).reshape(-1) for ev in evs]
@@ -68,6 +78,21 @@ def get_statistics(env) -> dict:
         "total_reward": env.total_reward,
     }
     
+    return stats
+
+def get_raw_statistics(env) -> Statistics:
+
+    money_spent_at_each_step = [household.money_spent_at_each_step for household in env.households]
+    money_earned_at_each_step = [household.money_earned_at_each_step for household in env.households]
+    
+    stats = Statistics(
+        cs_power_usage=env.cs_power,
+        cs_current=env.cs_current,
+        tr_inflexible_loads=env.tr_inflexible_loads,
+        tr_overload=env.tr_overload,
+        money_spent_at_each_step=np.array(money_spent_at_each_step),
+        money_earned_at_each_step=np.array(money_earned_at_each_step),
+    )
     
     return stats
 

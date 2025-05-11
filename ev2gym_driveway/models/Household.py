@@ -30,6 +30,9 @@ class Household:
         self.total_money_earned_discharging = 0
         self.total_invalid_action_punishment = 0
         
+        self.money_spent_at_each_step = []
+        self.money_earned_at_each_step = []
+        
         self.current_trip = None
         
     def step(self, actions, charge_price, discharge_price, sim_timestamp):
@@ -51,6 +54,9 @@ class Household:
         self.total_money_spent_charging += money_spent_charging
         self.total_money_earned_discharging += money_earned_discharging
         self.total_invalid_action_punishment += invalid_action_punishment
+        
+        self.money_spent_at_each_step.append(money_spent_charging)
+        self.money_earned_at_each_step.append(money_earned_discharging)
         
         return invalid_action_punishment
 
@@ -147,6 +153,9 @@ class Household:
         self.current_trip_weekday = None
         self.ev.reset()
         self.charging_station.reset()
+        
+        self.money_spent_at_each_step = []
+        self.money_earned_at_each_step = []
 
         self.ev_is_home = True
 

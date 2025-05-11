@@ -4,6 +4,7 @@ The environment is a gym environment and can be also used with the OpenAI gym st
 The environment an also be used for standalone simulations without the gym environment.
 """
 
+from pathlib import Path
 import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
@@ -17,7 +18,7 @@ from ev2gym_driveway.utilities.utils import (
     EV_spawner_for_driveways,
     calculate_charge_power_potential,
 )
-from ev2gym_driveway.utilities.statistics import get_statistics, print_statistics
+from ev2gym_driveway.utilities.statistics import get_raw_statistics, get_statistics, print_statistics
 from ev2gym_driveway.utilities.loaders import (
     load_ev_spawn_scenarios,
     load_transformers,
@@ -45,7 +46,12 @@ class EV2GymDriveway(gym.Env):
         cost_function=None,  # cost function to use in the simulation
         # whether to empty the ports at the end of the simulation or not
         verbose=False,
+        save_statistics=False,
+        load_ev_profiles_path=None, 
     ):
+        self.save_statistics = save_statistics
+        self.load_ev_profiles_path = load_ev_profiles_path
+
 
         super(EV2GymDriveway, self).__init__()
 
@@ -135,7 +141,15 @@ class EV2GymDriveway(gym.Env):
         
         self.EVs_for_driveways: list[EV] = EV_spawner_for_driveways(self)
         self.number_of_resets = 0 # used to make sure that random profiles are generated each time we reset
-        self.weekly_EV_profiles: list[dict] = load_weekly_EV_profiles(self.cs, self.timescale, self.number_of_resets)
+        
+        if self.load_ev_profiles_path is not None:
+            if self.verbose:
+                print(f"[INFO] Loading saved EV weekly profiles from {self.load_ev_profiles_path}")
+            self.weekly_EV_profiles = self._load_saved_ev_profiles(self.load_ev_profiles_path)
+        else:
+            self.weekly_EV_profiles = load_weekly_EV_profiles(self.cs, self.number_of_resets)
+            
+        # self.weekly_EV_profiles: list[dict] = load_weekly_EV_profiles(self.cs, self.number_of_resets)
 
         # Initialize Households (Driveways)
         self.households: list[Household] = []
@@ -214,7 +228,12 @@ class EV2GymDriveway(gym.Env):
         
         self.number_of_resets += 1
         # Re-sample weekly EV profiles (So we get new schedules)
-        self.weekly_EV_profiles = load_weekly_EV_profiles(self.cs, self.number_of_resets)
+        if self.load_ev_profiles_path is not None:
+            if self.verbose:
+                print(f"[INFO] Loading saved EV weekly profiles from {self.load_ev_profiles_path}")
+            self.weekly_EV_profiles = self._load_saved_ev_profiles(self.load_ev_profiles_path)
+        else:
+            self.weekly_EV_profiles = load_weekly_EV_profiles(self.cs, self.number_of_resets)
 
         # Assign new profiles to each household
         for household, new_profile in zip(self.households, self.weekly_EV_profiles):
@@ -224,7 +243,7 @@ class EV2GymDriveway(gym.Env):
         # Reset the simulation date
         self.sim_date = self.sim_starting_date
 
-        self.init_statistic_variables()
+        # self.init_statistic_variables()
 
         return self._get_observation(), {}
 
@@ -285,7 +304,9 @@ class EV2GymDriveway(gym.Env):
             - reward: is a scalar value representing the reward of the current step
             - done: is a boolean value indicating whether the episode is done or not
         """
-        assert not self.done, "Episode is done, please reset the environment"
+        if self.done:
+        # Already done — return dummy data
+            return self._check_termination(0)
 
         if self.verbose:
             print("-" * 80)
@@ -355,7 +376,7 @@ class EV2GymDriveway(gym.Env):
     
     def _check_termination(self, reward):
         done = self.current_step >= self.simulation_length or any(tr.is_overloaded() for tr in self.transformers)
-
+        
         info = {
             "total_money_spent": sum(h.total_money_spent_charging for h in self.households),
             "total_money_earned": sum(h.total_money_earned_discharging for h in self.households),
@@ -366,9 +387,15 @@ class EV2GymDriveway(gym.Env):
 
         if done:
             self.done = True
-        
-        if done:
             print_statistics(self)
+            if self.save_statistics:
+                stats = get_raw_statistics(self)
+                stats_dir = Path("statistics")
+                stats_dir.mkdir(parents=True, exist_ok=True)
+                
+                with open(stats_dir / f"{self.sim_name}.pkl", "wb") as f:
+                    pickle.dump(stats, f)
+            
 
         return self._get_observation(), reward, done, False, info
 
@@ -498,3 +525,26 @@ class EV2GymDriveway(gym.Env):
         self.total_reward += reward
 
         return reward
+    
+    def get_raw_statistics(self):
+        return get_raw_statistics(self)
+    
+    def _load_saved_ev_profiles(self, path):
+        import pickle
+        with open(path, "rb") as f:
+            weekly_profiles = pickle.load(f)
+        return weekly_profiles
+        
+    def _save_ev_profiles(self, path):
+        """
+        Saves the current weekly EV profiles to a file for future reproducibility.
+        """
+        import pickle
+        save_dir = Path(path).parent
+        save_dir.mkdir(parents=True, exist_ok=True)
+
+        with open(path, "wb") as f:
+            pickle.dump(self.weekly_EV_profiles, f)
+
+        if self.verbose:
+            print(f"[INFO] EV weekly profiles saved to {path}")

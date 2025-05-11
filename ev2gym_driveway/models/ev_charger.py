@@ -90,6 +90,9 @@ class EV_Charger:
         self.total_earned_discharging = 0
         self.verbose = verbose
         
+        self.energy_charged_at_each_step = []
+        self.energy_discharged_at_each_step = []
+        
     def reset(self):
         '''Resets the EV charger status to the initial state'''
 
@@ -104,6 +107,9 @@ class EV_Charger:
         self.total_energy_discharged = 0
         self.total_spent_charging = 0
         self.total_earned_discharging = 0
+        
+        self.energy_charged_at_each_step = []
+        self.energy_discharged_at_each_step = []
 
     def step(self, actions, charge_price, discharge_price):
         '''
@@ -175,6 +181,9 @@ class EV_Charger:
                 self.total_spent_charging += money_spent_charging
                 self.current_power_output += actual_energy * 60/self.timescale
                 self.current_total_amps += actual_amps
+                
+                self.energy_charged_at_each_step.append(self.current_power_output)
+                self.energy_discharged_at_each_step.append(0)
 
             elif action < 0:
                 amps = action * abs(self.max_discharge_current)
@@ -192,6 +201,10 @@ class EV_Charger:
                 self.total_earned_discharging += money_earned_discharging
                 self.current_power_output += actual_energy * 60/self.timescale
                 self.current_total_amps += actual_amps
+                
+                self.energy_charged_at_each_step.append(0)
+                self.energy_discharged_at_each_step.append(self.current_power_output)
+                
 
             # print(f'CS {self.id} port {i} action {action} amps {amps} energy {actual_energy} total_amps {self.current_total_amps}')
             self.current_signal.append(amps)

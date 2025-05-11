@@ -18,11 +18,11 @@ def state_function_basic_profit_view(env):
     """
 
     obs = []
+    time_step = min(env.current_step, env.charge_prices.shape[1] - 1)
 
     for household in env.households:
         ev = household.ev
         cs = household.charging_station
-        time_step = env.current_step
 
         # Battery level normalized
         battery_level = ev.current_capacity / ev.battery_capacity
@@ -49,7 +49,6 @@ def state_function_basic_profit_view(env):
 
     return np.array(obs).flatten()
 
-import numpy as np
 
 def state_function_with_future_trip(env):
     """
