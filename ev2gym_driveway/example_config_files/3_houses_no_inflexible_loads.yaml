@@ -4,7 +4,7 @@
 # Simulation Parameters
 ##############################################################################
 timescale: 15 # in minutes per step
-simulation_length: 672 # 672 steps = 7 days in 15 minute intervals
+simulation_length: 672 # 672 steps = 7 days in 15 minute intervals. Therefore 672*4 = 2688 steps = 1 month in 15 minute intervals
 
 ##############################################################################
 # Date and Time

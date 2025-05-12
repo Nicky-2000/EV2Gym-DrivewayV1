@@ -3,16 +3,36 @@
 
 import math
 
-def reward_function_profit_only(env, total_costs, user_satisfaction_list, invalid_action_punishment):
-    """
-    Rewards based on net money earned across all households (discharging - charging).
-    """
-    net_profit = 0
-    for household in env.households:
-        net_profit += household.total_money_earned_discharging
-        net_profit -= household.total_money_spent_charging
+def reward_function_profit_and_satisfaction(env, total_costs, user_satisfaction_list, invalid_action_punishment):
+    satisfaction_penalty = 0
+    arbitrage_profit = 0
 
-    return net_profit
+    for household in env.households:
+        arbitrage_profit += household.total_money_earned_discharging
+        arbitrage_profit -= household.total_money_spent_charging
+
+        if household.ev_just_departed:
+            soc_percent = 100 * (household.ev.current_capacity / household.ev.battery_capacity)
+            sat_score = satisfaction_score(soc_percent)
+
+            # Penalize sharply if score is low
+            dissatisfaction = (1 - sat_score)
+            satisfaction_penalty += 200 * dissatisfaction
+
+    # SCALE DOWN PROFIT
+    arbitrage_profit *= 0.001
+    # charging_cost_penalty = sum(h.total_money_spent_charging for h in env.households)
+    
+    return (arbitrage_profit - satisfaction_penalty - invalid_action_punishment)
+
+
+def satisfaction_score(soc_percent: float) -> float:
+    """
+    Returns a satisfaction score ∈ [0, 1] where 0 = unacceptable, 1 = fully charged.
+    Tuned to give steep dropoff below 70%.
+    """
+    x = soc_percent / 100
+    return 1 / (1 + math.exp(-15 * (x - 0.70)))  # Steep S-curve centered at 80%
 
 def SquaredTrackingErrorReward(env,*args):
     '''This reward function is the squared tracking error that uses the minimum of the power setpoints and the charge power potential

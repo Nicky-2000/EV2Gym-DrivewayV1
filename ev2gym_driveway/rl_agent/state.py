@@ -68,8 +68,13 @@ def state_function_with_future_trip(env):
     for household in env.households:
         ev = household.ev
         cs = household.charging_station
-        time_step = env.current_step
-
+        time_step = min(env.current_step, env.charge_prices.shape[1] - 1)
+        
+        future_window = 24  # next 2 hours if 15min timescale
+        end_idx = min(time_step + future_window, env.charge_prices.shape[1])
+        avg_future_charge = np.mean(env.charge_prices[cs.id, time_step:end_idx])
+        avg_future_discharge = np.mean(env.discharge_prices[cs.id, time_step:end_idx])
+        
         battery_level = ev.current_capacity / ev.battery_capacity
         charge_price = env.charge_prices[cs.id, time_step]
         discharge_price = env.discharge_prices[cs.id, time_step]
@@ -82,8 +87,18 @@ def state_function_with_future_trip(env):
 
         # Next trip info (fallback to 0 if not available)
         energy_needed = ev.energy_required_for_next_trip if ev.energy_required_for_next_trip else 0.0
-        time_until_departure = (ev.time_of_departure - env.sim_date).total_seconds() / 60 if ev.time_of_departure else 0.0
+        
+        # Time until departure (in steps), fallback to 0
+        if hasattr(ev, 'time_of_departure') and ev.time_of_departure is not None:
+            steps_until_departure = max(ev.time_of_departure - env.current_step, 0)
+            time_until_departure = steps_until_departure * env.timescale  # convert to minutes
+        else:
+            time_until_departure = 0.0
+            
+        # EV is home flag
+        ev_is_home_flag = 1.0 if household.ev_is_home else 0.0
 
+            
         features = [
             battery_level,
             charge_price,
@@ -92,7 +107,11 @@ def state_function_with_future_trip(env):
             time_cos,
             energy_needed / ev.battery_capacity,
             time_until_departure / 1440.0,  # normalized over 1 day
+            ev_is_home_flag,
+            avg_future_charge / 100,  # normalize based on expected max
+            avg_future_discharge / 100
         ]
+
 
         obs.append(features)
 

@@ -1,5 +1,6 @@
 # This file contains support functions for the EV City environment.
 
+import random
 import numpy as np
 import matplotlib.pyplot as plt
 import math
@@ -31,7 +32,11 @@ def spawn_single_EV(
     #     required_energy_mean, 0.5*required_energy_mean)  # kWh
 
     # if required_energy < 5:
-    required_energy = np.random.randint(5, 10)
+    # required_energy = np.random.randint(5, 10)
+    # want to init all vehicles with 40% of their battery capacity
+    
+    required_energy = 0
+    
 
     if env.heterogeneous_specs:
         sampled_ev = np.random.choice(
@@ -96,7 +101,7 @@ def spawn_single_EV(
 
         return EV(
             id=port,
-            battery_capacity_at_arrival=initial_battery_capacity,
+            battery_capacity_at_arrival = battery_capacity, #  * random.uniform(0.4, 1.0)
             max_ac_charge_power=env.ev_specs[sampled_ev]["max_ac_charge_power"],
             max_dc_charge_power=env.ev_specs[sampled_ev]["max_dc_charge_power"],
             max_discharge_power=-env.ev_specs[sampled_ev]["max_dc_discharge_power"],

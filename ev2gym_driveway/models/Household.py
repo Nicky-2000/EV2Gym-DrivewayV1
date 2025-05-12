@@ -34,6 +34,10 @@ class Household:
         self.money_earned_at_each_step = []
         
         self.current_trip = None
+        self.ev_is_home = True
+        
+        self.ev_just_departed = False
+        self.ev_satisfaction_on_departure = False
         
     def step(self, actions, charge_price, discharge_price, sim_timestamp):
         self.update_household(sim_timestamp)
@@ -65,6 +69,8 @@ class Household:
         Determine if the EV is connected to the charging station.
         If the EV is arriving from a trip update the SoC of the EV.
         """
+        
+        previous_trip = self.current_trip
 
         weekday = sim_timestamp.weekday() + 1  # 1=Monday
         day_profile = self.ev_weekly_profile[weekday]
@@ -87,6 +93,9 @@ class Household:
             self.current_trip_weekday = None
             # Find the timestamp that the EV will be departing home
             next_trip, days_ahead = self._get_next_trip(sim_timestamp)
+            assert next_trip is not None, "No next trip found in the profile."
+            self.update_next_trip_energy_estimate(next_trip)
+
             next_trip_departure_time = _hhmm_to_datetime(next_trip["departure"], sim_timestamp, days_ahead)
             next_trip_departure_time_step = timestamp_to_simulation_step(
                 self.sim_starting_date, self.timescale, next_trip_departure_time
@@ -96,6 +105,11 @@ class Household:
         else: # EV is on a trip
             self.current_trip_weekday = weekday
             self.ev_is_home = False
+        
+        if previous_trip != self.current_trip and self.current_trip is not None:
+            self.ev_just_departed = True
+        else: 
+            self.ev_just_departed = False
 
     def _get_current_trip(self, day_profile: dict, sim_timestamp: datetime):
         """
@@ -151,7 +165,6 @@ class Household:
         self.total_invalid_action_punishment = 0
         self.current_trip = None
         self.current_trip_weekday = None
-        self.ev.reset()
         self.charging_station.reset()
         
         self.money_spent_at_each_step = []
@@ -159,8 +172,12 @@ class Household:
 
         self.ev_is_home = True
 
+        self.ev.reset() # Reset the EV for this household   
+        
         # Reset next trip info
         next_trip, days_ahead = self._get_next_trip(self.sim_starting_date)
+        assert next_trip is not None, "No next trip found in the profile."
+        self.update_next_trip_energy_estimate(next_trip)
         if next_trip:
             next_trip_departure_time = _hhmm_to_datetime(next_trip["departure"], self.sim_starting_date, days_ahead)
             next_trip_departure_time_step = timestamp_to_simulation_step(
@@ -168,8 +185,17 @@ class Household:
             )
             self.ev.set_time_of_departure(next_trip_departure_time_step)
         
-        self.ev.reset() # Reset the EV for this house
+    def update_next_trip_energy_estimate(self, next_trip):
+        """
+        Updates the EV's energy estimate and time of departure based on the next scheduled trip.
+        """
 
+        if next_trip:
+            miles = next_trip["miles"]
+            km = miles * 1.60934
+            self.ev.estimate_energy_needed_for_trip(km)
+        else:
+            self.ev.energy_required_for_next_trip = 0.0
 
 def _hhmm_to_datetime(hhmm: int, simulation_timestamp: datetime, days_ahead: int = 0) -> datetime:
     hour, minute = divmod(hhmm, 100)

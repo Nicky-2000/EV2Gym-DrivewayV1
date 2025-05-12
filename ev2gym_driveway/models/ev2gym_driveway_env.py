@@ -31,8 +31,8 @@ from ev2gym_driveway.models.ev_charger import EV_Charger
 from ev2gym_driveway.models.ev import EV
 
 
-from ev2gym_driveway.rl_agent.reward import reward_function_profit_only
-from ev2gym_driveway.rl_agent.state import state_function_basic_profit_view
+from ev2gym_driveway.rl_agent.reward import reward_function_profit_and_satisfaction
+from ev2gym_driveway.rl_agent.state import state_function_with_future_trip
 
 
 class EV2GymDriveway(gym.Env):
@@ -41,14 +41,16 @@ class EV2GymDriveway(gym.Env):
         self,
         config_file=None,
         seed=None,
-        state_function=state_function_basic_profit_view,
-        reward_function=reward_function_profit_only,
+        state_function=state_function_with_future_trip,
+        reward_function=reward_function_profit_and_satisfaction,
         cost_function=None,  # cost function to use in the simulation
         # whether to empty the ports at the end of the simulation or not
         verbose=False,
         save_statistics=False,
-        load_ev_profiles_path=None, 
+        load_ev_profiles_path=None,
+        statistics_filename = None,
     ):
+        self.statistics_filename = statistics_filename
         self.save_statistics = save_statistics
         self.load_ev_profiles_path = load_ev_profiles_path
 
@@ -219,11 +221,11 @@ class EV2GymDriveway(gym.Env):
         for tr in self.transformers:
             tr.reset(step=self.current_step)
             
-        for household in self.households:
-            household.reset()
-            
         for ev in self.EVs_for_driveways:
             ev.reset()
+            
+        for household in self.households:
+            household.reset()
         
         
         self.number_of_resets += 1
@@ -243,7 +245,7 @@ class EV2GymDriveway(gym.Env):
         # Reset the simulation date
         self.sim_date = self.sim_starting_date
 
-        # self.init_statistic_variables()
+        self.init_statistic_variables()
 
         return self._get_observation(), {}
 
@@ -393,7 +395,7 @@ class EV2GymDriveway(gym.Env):
                 stats_dir = Path("statistics")
                 stats_dir.mkdir(parents=True, exist_ok=True)
                 
-                with open(stats_dir / f"{self.sim_name}.pkl", "wb") as f:
+                with open(stats_dir / f"{self.statistics_filename}.pkl", "wb") as f:
                     pickle.dump(stats, f)
             
 

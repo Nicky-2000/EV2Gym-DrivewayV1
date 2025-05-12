@@ -98,6 +98,8 @@ class EV():
         self.max_energy_AFAP = 0
         # timesteps that the EV is discharged below the minimum emergency battery capacity
         self.min_emergency_battery_capacity_metric = 0
+        self.energy_required_for_next_trip = 0
+        self.time_of_departure = 0
 
         # Baterry degradation
         self.abs_total_energy_exchanged = 0
@@ -114,13 +116,21 @@ class EV():
         self.time_of_arrival = time_of_arrival
         
     def update_battery_capacity_after_trip(self, km_driven: float) -> None:
-        energy_used = km_driven * self.drive_efficiency
+        energy_used = self.estimate_energy_for_kms(km_driven)
         print(f'EV {self.id} used {energy_used:.2f} kWh of energy during the trip.')
         print(f"Energy Before Trip: {self.current_capacity:.2f} kWh")
         print(f"Energy After Trip: {self.current_capacity - energy_used:.2f} kWh")
         self.current_capacity = max(0, self.current_capacity - energy_used)
         self.desired_capacity = self.battery_capacity
-        
+    
+    def estimate_energy_for_kms(self, km: float) -> float:
+        return km * self.drive_efficiency
+    
+    def estimate_energy_needed_for_trip(self, km_driven: float) -> float:
+        estimated_energy_for_next_trip = self.estimate_energy_for_kms(km_driven)
+        self.energy_required_for_next_trip = min(estimated_energy_for_next_trip * 1.2, self.battery_capacity - self.current_capacity)
+    
+    
     def reset(self):
         '''
         The reset method is used to reset the EV's status to the initial state.
@@ -140,6 +150,9 @@ class EV():
         self.abs_total_energy_exchanged = 0
         self.historic_soc = []
         self.active_steps = []
+        self.energy_required_for_next_trip = 0
+        self.time_of_departure = 0
+
 
         self.calendar_loss = 0
         self.cyclic_loss = 0
